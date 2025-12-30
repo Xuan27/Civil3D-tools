@@ -8,16 +8,8 @@ using PointStyleModifier.Models;
 
 namespace PointStyleModifier.Services
 {
-    /// <summary>
-    /// Service for point style operations in Civil 3D
-    /// </summary>
     public class PointStyleService
     {
-        /// <summary>
-        /// Retrieves all available point styles from the current Civil 3D document
-        /// </summary>
-        /// <param name="database">The AutoCAD database</param>
-        /// <returns>List of PointStyleInfo objects representing available styles</returns>
         public List<PointStyleInfo> GetPointStyles(Database database)
         {
             List<PointStyleInfo> pointStyles = new List<PointStyleInfo>();
@@ -47,19 +39,12 @@ namespace PointStyleModifier.Services
             }
             catch (Exception ex)
             {
-                throw new Exception($"Failed to retrieve point styles: {ex.Message}", ex);
+                throw new Exception(string.Format("Failed to retrieve point styles: {0}", ex.Message), ex);
             }
 
             return pointStyles;
         }
 
-        /// <summary>
-        /// Applies a point style to a collection of COGO points
-        /// </summary>
-        /// <param name="database">The AutoCAD database</param>
-        /// <param name="pointIds">Collection of COGO point ObjectIds</param>
-        /// <param name="styleId">The ObjectId of the style to apply</param>
-        /// <returns>Number of points successfully modified</returns>
         public int ApplyStyleToPoints(Database database, ObjectIdCollection pointIds, ObjectId styleId)
         {
             int modifiedCount = 0;
@@ -83,7 +68,7 @@ namespace PointStyleModifier.Services
             }
             catch (Exception ex)
             {
-                throw new Exception($"Failed to apply style to points: {ex.Message}", ex);
+                throw new Exception(string.Format("Failed to apply style to points: {0}", ex.Message), ex);
             }
 
             return modifiedCount;

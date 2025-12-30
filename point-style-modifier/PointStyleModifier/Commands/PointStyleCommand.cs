@@ -87,7 +87,7 @@ namespace PointStyleModifier.Commands
                 // Step 7: Display success message
                 ErrorHandler.ShowSuccess(
                     editor,
-                    $"Successfully applied style '{selectedStyle.Name}' to {modifiedCount} point(s).");
+                    string.Format("Successfully applied style '{0}' to {1} point(s).", selectedStyle.Name, modifiedCount));
             }
             catch (System.Exception ex)
             {
