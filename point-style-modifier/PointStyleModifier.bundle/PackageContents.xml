@@ -21,14 +21,14 @@
     OS="Win64"
     Platform="AutoCAD"
     SeriesMin="R23.0"
-    SeriesMax="R24.1" />
+    SeriesMax="R25.0" />
 
   <Components Description="Point Style Modifier Components">
     <RuntimeRequirements
       OS="Win64"
       Platform="AutoCAD"
       SeriesMin="R23.0"
-      SeriesMax="R24.1" />
+      SeriesMax="R25.0" />
 
     <ComponentEntry
       AppName="PointStyleModifier"
