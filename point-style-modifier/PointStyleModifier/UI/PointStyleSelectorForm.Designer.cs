@@ -5,10 +5,14 @@ namespace PointStyleModifier.UI
         private System.ComponentModel.IContainer components = null;
         private System.Windows.Forms.CheckBox checkBoxPointStyle;
         private System.Windows.Forms.CheckBox checkBoxLabelStyle;
+        private System.Windows.Forms.TextBox textBoxSearchPointStyle;
+        private System.Windows.Forms.TextBox textBoxSearchLabelStyle;
         private System.Windows.Forms.ListBox listBoxPointStyles;
         private System.Windows.Forms.ListBox listBoxLabelStyles;
         private System.Windows.Forms.Label labelPointStyle;
         private System.Windows.Forms.Label labelLabelStyle;
+        private System.Windows.Forms.Label labelSearchPointStyle;
+        private System.Windows.Forms.Label labelSearchLabelStyle;
         private System.Windows.Forms.Button buttonOk;
         private System.Windows.Forms.Button buttonCancel;
         private System.Windows.Forms.Label labelInstructions;
@@ -27,10 +31,14 @@ namespace PointStyleModifier.UI
         {
             this.checkBoxPointStyle = new System.Windows.Forms.CheckBox();
             this.checkBoxLabelStyle = new System.Windows.Forms.CheckBox();
+            this.textBoxSearchPointStyle = new System.Windows.Forms.TextBox();
+            this.textBoxSearchLabelStyle = new System.Windows.Forms.TextBox();
             this.listBoxPointStyles = new System.Windows.Forms.ListBox();
             this.listBoxLabelStyles = new System.Windows.Forms.ListBox();
             this.labelPointStyle = new System.Windows.Forms.Label();
             this.labelLabelStyle = new System.Windows.Forms.Label();
+            this.labelSearchPointStyle = new System.Windows.Forms.Label();
+            this.labelSearchLabelStyle = new System.Windows.Forms.Label();
             this.buttonOk = new System.Windows.Forms.Button();
             this.buttonCancel = new System.Windows.Forms.Button();
             this.labelInstructions = new System.Windows.Forms.Label();
@@ -69,13 +77,30 @@ namespace PointStyleModifier.UI
             this.labelPointStyle.TabIndex = 2;
             this.labelPointStyle.Text = "Available Point Styles:";
             //
+            // labelSearchPointStyle
+            //
+            this.labelSearchPointStyle.AutoSize = true;
+            this.labelSearchPointStyle.Location = new System.Drawing.Point(12, 95);
+            this.labelSearchPointStyle.Name = "labelSearchPointStyle";
+            this.labelSearchPointStyle.Size = new System.Drawing.Size(44, 13);
+            this.labelSearchPointStyle.TabIndex = 3;
+            this.labelSearchPointStyle.Text = "Search:";
+            //
+            // textBoxSearchPointStyle
+            //
+            this.textBoxSearchPointStyle.Location = new System.Drawing.Point(12, 111);
+            this.textBoxSearchPointStyle.Name = "textBoxSearchPointStyle";
+            this.textBoxSearchPointStyle.Size = new System.Drawing.Size(260, 20);
+            this.textBoxSearchPointStyle.TabIndex = 4;
+            this.textBoxSearchPointStyle.TextChanged += new System.EventHandler(this.textBoxSearchPointStyle_TextChanged);
+            //
             // listBoxPointStyles
             //
             this.listBoxPointStyles.FormattingEnabled = true;
-            this.listBoxPointStyles.Location = new System.Drawing.Point(12, 95);
+            this.listBoxPointStyles.Location = new System.Drawing.Point(12, 137);
             this.listBoxPointStyles.Name = "listBoxPointStyles";
-            this.listBoxPointStyles.Size = new System.Drawing.Size(260, 200);
-            this.listBoxPointStyles.TabIndex = 3;
+            this.listBoxPointStyles.Size = new System.Drawing.Size(260, 160);
+            this.listBoxPointStyles.TabIndex = 5;
             //
             // checkBoxLabelStyle
             //
@@ -83,7 +108,7 @@ namespace PointStyleModifier.UI
             this.checkBoxLabelStyle.Location = new System.Drawing.Point(290, 50);
             this.checkBoxLabelStyle.Name = "checkBoxLabelStyle";
             this.checkBoxLabelStyle.Size = new System.Drawing.Size(145, 17);
-            this.checkBoxLabelStyle.TabIndex = 4;
+            this.checkBoxLabelStyle.TabIndex = 6;
             this.checkBoxLabelStyle.Text = "Modify Label Style (Text)";
             this.checkBoxLabelStyle.UseVisualStyleBackColor = true;
             this.checkBoxLabelStyle.CheckedChanged += new System.EventHandler(this.checkBoxLabelStyle_CheckedChanged);
@@ -94,17 +119,35 @@ namespace PointStyleModifier.UI
             this.labelLabelStyle.Location = new System.Drawing.Point(290, 75);
             this.labelLabelStyle.Name = "labelLabelStyle";
             this.labelLabelStyle.Size = new System.Drawing.Size(105, 13);
-            this.labelLabelStyle.TabIndex = 5;
+            this.labelLabelStyle.TabIndex = 7;
             this.labelLabelStyle.Text = "Available Label Styles:";
+            //
+            // labelSearchLabelStyle
+            //
+            this.labelSearchLabelStyle.AutoSize = true;
+            this.labelSearchLabelStyle.Location = new System.Drawing.Point(290, 95);
+            this.labelSearchLabelStyle.Name = "labelSearchLabelStyle";
+            this.labelSearchLabelStyle.Size = new System.Drawing.Size(44, 13);
+            this.labelSearchLabelStyle.TabIndex = 8;
+            this.labelSearchLabelStyle.Text = "Search:";
+            //
+            // textBoxSearchLabelStyle
+            //
+            this.textBoxSearchLabelStyle.Enabled = false;
+            this.textBoxSearchLabelStyle.Location = new System.Drawing.Point(290, 111);
+            this.textBoxSearchLabelStyle.Name = "textBoxSearchLabelStyle";
+            this.textBoxSearchLabelStyle.Size = new System.Drawing.Size(260, 20);
+            this.textBoxSearchLabelStyle.TabIndex = 9;
+            this.textBoxSearchLabelStyle.TextChanged += new System.EventHandler(this.textBoxSearchLabelStyle_TextChanged);
             //
             // listBoxLabelStyles
             //
             this.listBoxLabelStyles.Enabled = false;
             this.listBoxLabelStyles.FormattingEnabled = true;
-            this.listBoxLabelStyles.Location = new System.Drawing.Point(290, 95);
+            this.listBoxLabelStyles.Location = new System.Drawing.Point(290, 137);
             this.listBoxLabelStyles.Name = "listBoxLabelStyles";
-            this.listBoxLabelStyles.Size = new System.Drawing.Size(260, 200);
-            this.listBoxLabelStyles.TabIndex = 6;
+            this.listBoxLabelStyles.Size = new System.Drawing.Size(260, 160);
+            this.listBoxLabelStyles.TabIndex = 10;
             //
             // panelButtons
             //
@@ -113,7 +156,7 @@ namespace PointStyleModifier.UI
             this.panelButtons.Location = new System.Drawing.Point(12, 310);
             this.panelButtons.Name = "panelButtons";
             this.panelButtons.Size = new System.Drawing.Size(538, 40);
-            this.panelButtons.TabIndex = 7;
+            this.panelButtons.TabIndex = 11;
             //
             // buttonOk
             //
@@ -147,9 +190,13 @@ namespace PointStyleModifier.UI
             this.ClientSize = new System.Drawing.Size(564, 362);
             this.Controls.Add(this.panelButtons);
             this.Controls.Add(this.listBoxLabelStyles);
+            this.Controls.Add(this.textBoxSearchLabelStyle);
+            this.Controls.Add(this.labelSearchLabelStyle);
             this.Controls.Add(this.labelLabelStyle);
             this.Controls.Add(this.checkBoxLabelStyle);
             this.Controls.Add(this.listBoxPointStyles);
+            this.Controls.Add(this.textBoxSearchPointStyle);
+            this.Controls.Add(this.labelSearchPointStyle);
             this.Controls.Add(this.labelPointStyle);
             this.Controls.Add(this.checkBoxPointStyle);
             this.Controls.Add(this.labelInstructions);

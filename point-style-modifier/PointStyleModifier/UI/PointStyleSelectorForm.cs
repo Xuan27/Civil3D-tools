@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows.Forms;
 using PointStyleModifier.Models;
 
@@ -10,6 +11,9 @@ namespace PointStyleModifier.UI
     /// </summary>
     public partial class PointStyleSelectorForm : Form
     {
+        private List<PointStyleInfo> allPointStyles;
+        private List<LabelStyleInfo> allLabelStyles;
+
         /// <summary>
         /// Gets the point style selected by the user
         /// </summary>
@@ -40,32 +44,57 @@ namespace PointStyleModifier.UI
         /// </summary>
         public void PopulateStyles(List<PointStyleInfo> pointStyles, List<LabelStyleInfo> labelStyles)
         {
+            allPointStyles = pointStyles ?? new List<PointStyleInfo>();
+            allLabelStyles = labelStyles ?? new List<LabelStyleInfo>();
+
+            FilterPointStyles();
+            FilterLabelStyles();
+        }
+
+        private void FilterPointStyles()
+        {
+            string searchText = textBoxSearchPointStyle.Text.ToLower();
             listBoxPointStyles.Items.Clear();
+
+            var filtered = allPointStyles.Where(s => s.Name.ToLower().Contains(searchText)).ToList();
+
+            foreach (var style in filtered)
+            {
+                listBoxPointStyles.Items.Add(style);
+            }
+
+            if (listBoxPointStyles.Items.Count > 0)
+            {
+                listBoxPointStyles.SelectedIndex = 0;
+            }
+        }
+
+        private void FilterLabelStyles()
+        {
+            string searchText = textBoxSearchLabelStyle.Text.ToLower();
             listBoxLabelStyles.Items.Clear();
 
-            if (pointStyles != null && pointStyles.Count > 0)
+            var filtered = allLabelStyles.Where(s => s.Name.ToLower().Contains(searchText)).ToList();
+
+            foreach (var style in filtered)
             {
-                foreach (PointStyleInfo style in pointStyles)
-                {
-                    listBoxPointStyles.Items.Add(style);
-                }
-                if (listBoxPointStyles.Items.Count > 0)
-                {
-                    listBoxPointStyles.SelectedIndex = 0;
-                }
+                listBoxLabelStyles.Items.Add(style);
             }
 
-            if (labelStyles != null && labelStyles.Count > 0)
+            if (listBoxLabelStyles.Items.Count > 0)
             {
-                foreach (LabelStyleInfo style in labelStyles)
-                {
-                    listBoxLabelStyles.Items.Add(style);
-                }
-                if (listBoxLabelStyles.Items.Count > 0)
-                {
-                    listBoxLabelStyles.SelectedIndex = 0;
-                }
+                listBoxLabelStyles.SelectedIndex = 0;
             }
+        }
+
+        private void textBoxSearchPointStyle_TextChanged(object sender, EventArgs e)
+        {
+            FilterPointStyles();
+        }
+
+        private void textBoxSearchLabelStyle_TextChanged(object sender, EventArgs e)
+        {
+            FilterLabelStyles();
         }
 
         private void buttonOk_Click(object sender, EventArgs e)
@@ -115,11 +144,13 @@ namespace PointStyleModifier.UI
 
         private void checkBoxPointStyle_CheckedChanged(object sender, EventArgs e)
         {
+            textBoxSearchPointStyle.Enabled = checkBoxPointStyle.Checked;
             listBoxPointStyles.Enabled = checkBoxPointStyle.Checked;
         }
 
         private void checkBoxLabelStyle_CheckedChanged(object sender, EventArgs e)
         {
+            textBoxSearchLabelStyle.Enabled = checkBoxLabelStyle.Checked;
             listBoxLabelStyles.Enabled = checkBoxLabelStyle.Checked;
         }
     }
