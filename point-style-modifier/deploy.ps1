@@ -11,21 +11,29 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "Build successful!" -ForegroundColor Green
 
-# Define paths - try Debug first, then Release
-$dllDebug = "PointStyleModifier\bin\Debug\net48\PointStyleModifier.dll"
-$dllRelease = "PointStyleModifier\bin\Release\net48\PointStyleModifier.dll"
+# Define paths - try x64 and non-x64, Debug and Release
+$possiblePaths = @(
+    "PointStyleModifier\bin\x64\Debug\net48\PointStyleModifier.dll",
+    "PointStyleModifier\bin\Debug\net48\PointStyleModifier.dll",
+    "PointStyleModifier\bin\x64\Release\net48\PointStyleModifier.dll",
+    "PointStyleModifier\bin\Release\net48\PointStyleModifier.dll"
+)
 
-if (Test-Path $dllDebug) {
-    $dllSource = $dllDebug
-    Write-Host "Using Debug build" -ForegroundColor Yellow
-} elseif (Test-Path $dllRelease) {
-    $dllSource = $dllRelease
-    Write-Host "Using Release build" -ForegroundColor Yellow
-} else {
-    Write-Host "Error: Could not find PointStyleModifier.dll in Debug or Release folder" -ForegroundColor Red
+$dllSource = $null
+foreach ($path in $possiblePaths) {
+    if (Test-Path $path) {
+        $dllSource = $path
+        Write-Host "Found DLL at: $path" -ForegroundColor Green
+        break
+    }
+}
+
+if ($null -eq $dllSource) {
+    Write-Host "Error: Could not find PointStyleModifier.dll" -ForegroundColor Red
     Write-Host "Checked:" -ForegroundColor Yellow
-    Write-Host "  $dllDebug" -ForegroundColor White
-    Write-Host "  $dllRelease" -ForegroundColor White
+    foreach ($path in $possiblePaths) {
+        Write-Host "  $path" -ForegroundColor White
+    }
     exit 1
 }
 
