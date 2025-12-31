@@ -16,7 +16,7 @@ namespace PointStyleModifier.Services
         {
             TypedValue[] filterList = new TypedValue[]
             {
-                new TypedValue((int)DxfCode.Start, "AeccDbCogoPoint")
+                new TypedValue((int)DxfCode.Start, "AECC_COGO_POINT")
             };
             return new SelectionFilter(filterList);
         }
