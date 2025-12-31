@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ApplicationPackage
+  SchemaVersion="1.0"
+  AutodeskProduct="AutoCAD"
+  ProductType="Application"
+  Name="PointStyleModifier"
+  Description="Tool to modify COGO point and label styles"
+  AppVersion="1.0.0"
+  Author="Your Name"
+  FriendlyVersion="1.0.0"
+  ProductCode="{8B5E5F3A-9C7D-4E2B-A1F3-6D8E9F0C1B2A}"
+  UpgradeCode="{8B5E5F3A-9C7D-4E2B-A1F3-6D8E9F0C1B2A}">
+
+  <CompanyDetails
+    Name="Your Company"
+    Phone=" "
+    Url=" "
+    Email=" " />
+
+  <RuntimeRequirements
+    OS="Win64"
+    Platform="AutoCAD"
+    SeriesMin="R23.0"
+    SeriesMax="R24.1" />
+
+  <Components Description="Point Style Modifier Components">
+    <RuntimeRequirements
+      OS="Win64"
+      Platform="AutoCAD"
+      SeriesMin="R23.0"
+      SeriesMax="R24.1" />
+
+    <ComponentEntry
+      AppName="PointStyleModifier"
+      ModuleName="./Contents/PointStyleModifier.dll"
+      AppDescription="Modify COGO point and label styles"
+      LoadOnCommandInvocation="True"
+      LoadOnAutoCADStartup="True" />
+  </Components>
+</ApplicationPackage>
