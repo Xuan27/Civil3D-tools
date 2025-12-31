@@ -11,10 +11,26 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "Build successful!" -ForegroundColor Green
 
-# Define paths
+# Define paths - try Debug first, then Release
+$dllDebug = "PointStyleModifier\bin\Debug\net48\PointStyleModifier.dll"
+$dllRelease = "PointStyleModifier\bin\Release\net48\PointStyleModifier.dll"
+
+if (Test-Path $dllDebug) {
+    $dllSource = $dllDebug
+    Write-Host "Using Debug build" -ForegroundColor Yellow
+} elseif (Test-Path $dllRelease) {
+    $dllSource = $dllRelease
+    Write-Host "Using Release build" -ForegroundColor Yellow
+} else {
+    Write-Host "Error: Could not find PointStyleModifier.dll in Debug or Release folder" -ForegroundColor Red
+    Write-Host "Checked:" -ForegroundColor Yellow
+    Write-Host "  $dllDebug" -ForegroundColor White
+    Write-Host "  $dllRelease" -ForegroundColor White
+    exit 1
+}
+
 $bundlePath = "C:\ProgramData\Autodesk\ApplicationPlugins\PointStyleModifier.bundle"
 $contentsPath = "$bundlePath\Contents"
-$dllSource = "PointStyleModifier\bin\Debug\net48\PointStyleModifier.dll"
 $xmlSource = "PointStyleModifier.bundle\PackageContents.xml"
 
 # Create bundle directories
@@ -36,6 +52,9 @@ Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "Plugin deployed to:" -ForegroundColor Yellow
 Write-Host "  $bundlePath" -ForegroundColor White
+Write-Host ""
+Write-Host "DLL copied from:" -ForegroundColor Yellow
+Write-Host "  $dllSource" -ForegroundColor White
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
 Write-Host "  1. Restart Civil 3D completely" -ForegroundColor White
