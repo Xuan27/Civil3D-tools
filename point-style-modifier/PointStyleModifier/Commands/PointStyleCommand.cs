@@ -12,12 +12,12 @@ using PointStyleModifier.Utilities;
 namespace PointStyleModifier.Commands
 {
     /// <summary>
-    /// AutoCAD command class for modifying COGO point styles
+    /// AutoCAD command class for modifying COGO point and label styles
     /// </summary>
     public class PointStyleCommand
     {
         /// <summary>
-        /// Command to modify the style of selected COGO points
+        /// Command to modify the style and/or label style of selected COGO points
         /// Usage: Type MODIFYPOINTSTYLE at the AutoCAD command line
         /// </summary>
         [CommandMethod("MODIFYPOINTSTYLE")]
@@ -59,35 +59,63 @@ namespace PointStyleModifier.Commands
                     return;
                 }
 
-                // Step 4: Retrieve available point styles
-                PointStyleService styleService = new PointStyleService();
-                List<PointStyleInfo> availableStyles = styleService.GetPointStyles(database);
+                // Step 4: Retrieve available styles
+                PointStyleService pointStyleService = new PointStyleService();
+                PointLabelStyleService labelStyleService = new PointLabelStyleService();
 
-                if (availableStyles == null || availableStyles.Count == 0)
+                List<PointStyleInfo> availablePointStyles = pointStyleService.GetPointStyles(database);
+                List<LabelStyleInfo> availableLabelStyles = labelStyleService.GetPointLabelStyles(database);
+
+                if ((availablePointStyles == null || availablePointStyles.Count == 0) &&
+                    (availableLabelStyles == null || availableLabelStyles.Count == 0))
                 {
-                    ErrorHandler.ShowWarning(editor, "No point styles found in the current drawing.");
+                    ErrorHandler.ShowWarning(editor, "No point styles or label styles found in the current drawing.");
                     return;
                 }
 
                 // Step 5: Show dialog for style selection
-                PointStyleInfo selectedStyle = ShowStyleSelectionDialog(availableStyles);
-
-                if (selectedStyle == null)
+                using (PointStyleSelectorForm form = new PointStyleSelectorForm())
                 {
-                    ErrorHandler.ShowMessage(editor, "Command cancelled.");
-                    return;
+                    form.PopulateStyles(availablePointStyles, availableLabelStyles);
+
+                    if (Application.ShowModalDialog(form) != System.Windows.Forms.DialogResult.OK)
+                    {
+                        ErrorHandler.ShowMessage(editor, "Command cancelled.");
+                        return;
+                    }
+
+                    // Step 6: Apply selected styles to points
+                    int pointStyleModifiedCount = 0;
+                    int labelStyleModifiedCount = 0;
+                    List<string> messages = new List<string>();
+
+                    if (form.ModifyPointStyle && form.SelectedPointStyle != null)
+                    {
+                        pointStyleModifiedCount = pointStyleService.ApplyStyleToPoints(
+                            database,
+                            selectedPointIds,
+                            form.SelectedPointStyle.StyleId);
+                        messages.Add(string.Format("Point style '{0}' applied to {1} point(s)",
+                            form.SelectedPointStyle.Name, pointStyleModifiedCount));
+                    }
+
+                    if (form.ModifyLabelStyle && form.SelectedLabelStyle != null)
+                    {
+                        labelStyleModifiedCount = labelStyleService.ApplyLabelStyleToPoints(
+                            database,
+                            selectedPointIds,
+                            form.SelectedLabelStyle.StyleId);
+                        messages.Add(string.Format("Label style '{0}' applied to {1} point(s)",
+                            form.SelectedLabelStyle.Name, labelStyleModifiedCount));
+                    }
+
+                    // Step 7: Display success message
+                    if (messages.Count > 0)
+                    {
+                        ErrorHandler.ShowSuccess(editor, string.Format("Successfully modified styles:\n{0}",
+                            string.Join("\n", messages.ToArray())));
+                    }
                 }
-
-                // Step 6: Apply selected style to points
-                int modifiedCount = styleService.ApplyStyleToPoints(
-                    database,
-                    selectedPointIds,
-                    selectedStyle.StyleId);
-
-                // Step 7: Display success message
-                ErrorHandler.ShowSuccess(
-                    editor,
-                    string.Format("Successfully applied style '{0}' to {1} point(s).", selectedStyle.Name, modifiedCount));
             }
             catch (System.Exception ex)
             {
@@ -112,26 +140,6 @@ namespace PointStyleModifier.Commands
             };
 
             return editor.GetSelection(options, filter);
-        }
-
-        /// <summary>
-        /// Shows the point style selection dialog
-        /// </summary>
-        /// <param name="availableStyles">List of available point styles</param>
-        /// <returns>Selected PointStyleInfo or null if cancelled</returns>
-        private PointStyleInfo ShowStyleSelectionDialog(List<PointStyleInfo> availableStyles)
-        {
-            using (PointStyleSelectorForm form = new PointStyleSelectorForm())
-            {
-                form.PopulatePointStyles(availableStyles);
-
-                if (Application.ShowModalDialog(form) == System.Windows.Forms.DialogResult.OK)
-                {
-                    return form.SelectedPointStyle;
-                }
-            }
-
-            return null;
         }
     }
 }

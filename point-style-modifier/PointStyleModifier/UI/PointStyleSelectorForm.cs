@@ -6,7 +6,7 @@ using PointStyleModifier.Models;
 namespace PointStyleModifier.UI
 {
     /// <summary>
-    /// Windows Forms dialog for selecting a point style
+    /// Windows Forms dialog for selecting point and/or label styles
     /// </summary>
     public partial class PointStyleSelectorForm : Form
     {
@@ -15,47 +15,94 @@ namespace PointStyleModifier.UI
         /// </summary>
         public PointStyleInfo SelectedPointStyle { get; private set; }
 
+        /// <summary>
+        /// Gets the label style selected by the user
+        /// </summary>
+        public LabelStyleInfo SelectedLabelStyle { get; private set; }
+
+        /// <summary>
+        /// Gets whether the user wants to modify the point style
+        /// </summary>
+        public bool ModifyPointStyle => checkBoxPointStyle.Checked;
+
+        /// <summary>
+        /// Gets whether the user wants to modify the label style
+        /// </summary>
+        public bool ModifyLabelStyle => checkBoxLabelStyle.Checked;
+
         public PointStyleSelectorForm()
         {
             InitializeComponent();
         }
 
         /// <summary>
-        /// Populates the list box with available point styles
+        /// Populates the list boxes with available styles
         /// </summary>
-        /// <param name="styles">List of available point styles</param>
-        public void PopulatePointStyles(List<PointStyleInfo> styles)
+        public void PopulateStyles(List<PointStyleInfo> pointStyles, List<LabelStyleInfo> labelStyles)
         {
-            listBoxStyles.Items.Clear();
+            listBoxPointStyles.Items.Clear();
+            listBoxLabelStyles.Items.Clear();
 
-            if (styles != null && styles.Count > 0)
+            if (pointStyles != null && pointStyles.Count > 0)
             {
-                foreach (PointStyleInfo style in styles)
+                foreach (PointStyleInfo style in pointStyles)
                 {
-                    listBoxStyles.Items.Add(style);
+                    listBoxPointStyles.Items.Add(style);
                 }
-
-                // Select the first item by default
-                if (listBoxStyles.Items.Count > 0)
+                if (listBoxPointStyles.Items.Count > 0)
                 {
-                    listBoxStyles.SelectedIndex = 0;
+                    listBoxPointStyles.SelectedIndex = 0;
+                }
+            }
+
+            if (labelStyles != null && labelStyles.Count > 0)
+            {
+                foreach (LabelStyleInfo style in labelStyles)
+                {
+                    listBoxLabelStyles.Items.Add(style);
+                }
+                if (listBoxLabelStyles.Items.Count > 0)
+                {
+                    listBoxLabelStyles.SelectedIndex = 0;
                 }
             }
         }
 
         private void buttonOk_Click(object sender, EventArgs e)
         {
-            if (listBoxStyles.SelectedItem == null)
+            if (!checkBoxPointStyle.Checked && !checkBoxLabelStyle.Checked)
             {
                 MessageBox.Show(
-                    "Please select a point style.",
-                    "No Selection",
+                    "Please select at least one modification option (Point Style or Label Style).",
+                    "No Option Selected",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
                 return;
             }
 
-            SelectedPointStyle = listBoxStyles.SelectedItem as PointStyleInfo;
+            if (checkBoxPointStyle.Checked && listBoxPointStyles.SelectedItem == null)
+            {
+                MessageBox.Show(
+                    "Please select a point style.",
+                    "No Point Style Selected",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (checkBoxLabelStyle.Checked && listBoxLabelStyles.SelectedItem == null)
+            {
+                MessageBox.Show(
+                    "Please select a label style.",
+                    "No Label Style Selected",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            SelectedPointStyle = listBoxPointStyles.SelectedItem as PointStyleInfo;
+            SelectedLabelStyle = listBoxLabelStyles.SelectedItem as LabelStyleInfo;
+
             DialogResult = DialogResult.OK;
             Close();
         }
@@ -66,12 +113,14 @@ namespace PointStyleModifier.UI
             Close();
         }
 
-        private void listBoxStyles_DoubleClick(object sender, EventArgs e)
+        private void checkBoxPointStyle_CheckedChanged(object sender, EventArgs e)
         {
-            if (listBoxStyles.SelectedItem != null)
-            {
-                buttonOk_Click(sender, e);
-            }
+            listBoxPointStyles.Enabled = checkBoxPointStyle.Checked;
+        }
+
+        private void checkBoxLabelStyle_CheckedChanged(object sender, EventArgs e)
+        {
+            listBoxLabelStyles.Enabled = checkBoxLabelStyle.Checked;
         }
     }
 }
