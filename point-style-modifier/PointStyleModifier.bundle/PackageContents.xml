@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ApplicationPackage
   SchemaVersion="1.0"
-  AutodeskProduct="AutoCAD"
+  AutodeskProduct="Civil3D"
   ProductType="Application"
   Name="PointStyleModifier"
   Description="Tool to modify COGO point and label styles"
@@ -19,14 +19,14 @@
 
   <RuntimeRequirements
     OS="Win64"
-    Platform="AutoCAD"
+    Platform="Civil3D"
     SeriesMin="R23.0"
     SeriesMax="R25.0" />
 
   <Components Description="Point Style Modifier Components">
     <RuntimeRequirements
       OS="Win64"
-      Platform="AutoCAD"
+      Platform="Civil3D"
       SeriesMin="R23.0"
       SeriesMax="R25.0" />
 
