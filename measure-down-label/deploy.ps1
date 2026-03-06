@@ -3,7 +3,7 @@
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  MeasureDownLabel — Build & Deploy" -ForegroundColor Cyan
+Write-Host "  MeasureDownLabel - Build and Deploy" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -17,7 +17,7 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "Build successful!" -ForegroundColor Green
 
-# Locate the compiled DLL — check Debug and Release, x64 and non-x64
+# Locate the compiled DLL - check Debug and Release, x64 and non-x64
 $possiblePaths = @(
     "MeasureDownLabel\bin\x64\Debug\net48\MeasureDownLabel.dll",
     "MeasureDownLabel\bin\Debug\net48\MeasureDownLabel.dll",
