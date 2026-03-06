@@ -21,9 +21,9 @@ namespace MeasureDownLabel.Services
         /// </summary>
         public string BuildLabelText(MeasureDownInput input)
         {
-            // Format elevations to 2 decimal places
+            // Top elevation: 2 decimal places; Bottom (flow line): 1 decimal place
             string top = input.TopElevation.ToString("0.00");
-            string bottom = input.BottomElevation.ToString("0.00");
+            string bottom = input.BottomElevation.ToString("0.0");
             string size = input.PipeSize.ToString("0.##");
 
             // \P = MTEXT line break
@@ -70,7 +70,7 @@ namespace MeasureDownLabel.Services
                 if (styleId == ObjectId.Null)
                 {
                     editor.WriteMessage(
-                        string.Format("\n  [!] MLeader style '{0}' not found — using drawing default.", InletStyleName));
+                        string.Format("\n  [!] MLeader style '{0}' not found - using drawing default.", InletStyleName));
                     styleId = database.MLeaderStyleDictionaryId; // will fall back gracefully
                 }
 
@@ -86,13 +86,11 @@ namespace MeasureDownLabel.Services
 
                 mleader.ContentType = ContentType.MTextContent;
 
-                // Set MTEXT content — Location must be set before assigning to MLeader
-                // otherwise the text anchors at the drawing origin (0,0,0)
+                // Set MTEXT content
                 MText mtext = new MText();
                 mtext.SetDatabaseDefaults(database);
                 mtext.Contents = content;
-                mtext.TextHeight = GetStyleTextHeight(database, tr, styleId);
-                mtext.Location = input.LeaderPoint;
+                mtext.TextHeight = 0.06;
                 mleader.MText = mtext;
 
                 // Build leader geometry: one leader, one line with two vertices
@@ -104,6 +102,12 @@ namespace MeasureDownLabel.Services
 
                 // Landing end toward where the label sits
                 mleader.AddLastVertex(leaderLineIdx, input.LeaderPoint);
+
+                // Explicitly position the text at the landing point.
+                // The MLeader manages text location independently of MText.Location —
+                // setting it here ensures the label does not snap back to the origin
+                // when the entity is edited.
+                mleader.TextLocation = input.LeaderPoint;
 
                 // Add to model space
                 BlockTableRecord modelSpace = tr.GetObject(
@@ -119,24 +123,5 @@ namespace MeasureDownLabel.Services
             return placedId;
         }
 
-        // ---------------------------------------------------------------------------
-        // Helper: read the text height from the resolved MLeader style, or use a
-        // sensible default so the label is readable regardless of style availability.
-        // ---------------------------------------------------------------------------
-        private double GetStyleTextHeight(Database database, Transaction tr, ObjectId styleId)
-        {
-            try
-            {
-                if (!styleId.IsNull && styleId != database.MLeaderStyleDictionaryId)
-                {
-                    MLeaderStyle style = tr.GetObject(styleId, OpenMode.ForRead) as MLeaderStyle;
-                    if (style != null && style.TextHeight > 0)
-                        return style.TextHeight;
-                }
-            }
-            catch { /* ignore — fall through to default */ }
-
-            return 0.1; // 0.1 drawing units; adjust per project standard
-        }
     }
 }

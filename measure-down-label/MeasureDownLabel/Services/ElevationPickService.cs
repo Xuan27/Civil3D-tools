@@ -6,14 +6,15 @@ using Autodesk.Civil.DatabaseServices;
 namespace MeasureDownLabel.Services
 {
     /// <summary>
-    /// Handles interactive elevation acquisition — either by picking a COGO point
-    /// or by typing a value directly at the command prompt.
+    /// Handles interactive elevation acquisition — either by clicking a COGO point
+    /// directly (entity selection with filter) or by typing a value.
     /// </summary>
     public class ElevationPickService
     {
         /// <summary>
-        /// Prompts the user to either click a COGO point or type an elevation.
-        /// Returns true and sets <paramref name="elevation"/> on success.
+        /// Prompts the user to pick a COGO point or type an elevation manually.
+        /// Uses keyword selection so the user can explicitly choose the input method.
+        /// Returns true on success.
         /// </summary>
         public bool TryGetElevation(
             Editor editor,
@@ -25,48 +26,92 @@ namespace MeasureDownLabel.Services
             elevation = double.NaN;
             pickedPoint = Point3d.Origin;
 
-            editor.WriteMessage(string.Format(
-                "\n  {0} — click a COGO point or type a value <Enter to skip>: ", promptLabel));
+            // Ask which input method the user wants
+            PromptKeywordOptions kwOpts = new PromptKeywordOptions(
+                string.Format("\n  {0} — input method [Point/Type] <Point>: ", promptLabel));
+            kwOpts.Keywords.Add("Point");
+            kwOpts.Keywords.Add("Type");
+            kwOpts.Keywords.Default = "Point";
+            kwOpts.AllowNone = true;
 
-            // First, try a point pick (allows snapping to COGO points)
-            PromptPointOptions ppo = new PromptPointOptions(string.Empty)
-            {
-                AllowNone = true,
-                AllowArbitraryInput = true
-            };
+            PromptResult kwResult = editor.GetKeywords(kwOpts);
 
-            PromptPointResult ppr = editor.GetPoint(ppo);
-
-            if (ppr.Status == PromptStatus.Cancel)
+            if (kwResult.Status == PromptStatus.Cancel)
                 return false;
 
-            if (ppr.Status == PromptStatus.OK)
+            bool usePointPick = kwResult.Status == PromptStatus.None ||
+                                string.Equals(kwResult.StringResult, "Point",
+                                    System.StringComparison.OrdinalIgnoreCase);
+
+            if (usePointPick)
+                return TryPickCogoPoint(editor, database, promptLabel, out elevation, out pickedPoint);
+            else
+                return TryTypeElevation(editor, promptLabel, out elevation, out pickedPoint);
+        }
+
+        // -----------------------------------------------------------------------
+        // Entity-pick path: user clicks directly on a COGO point.
+        // GetEntity with a DXF type filter ensures only COGO points are accepted.
+        // -----------------------------------------------------------------------
+        private bool TryPickCogoPoint(
+            Editor editor,
+            Database database,
+            string promptLabel,
+            out double elevation,
+            out Point3d pickedPoint)
+        {
+            elevation = double.NaN;
+            pickedPoint = Point3d.Origin;
+
+            PromptEntityOptions entOpts = new PromptEntityOptions(
+                string.Format("\n  Click the COGO point for {0}: ", promptLabel));
+            entOpts.SetRejectMessage("\n  That is not a COGO point. Please select a COGO point.");
+            entOpts.AddAllowedClass(typeof(CogoPoint), exactMatch: false);
+
+            PromptEntityResult entResult = editor.GetEntity(entOpts);
+
+            if (entResult.Status == PromptStatus.Cancel)
+                return false;
+
+            if (entResult.Status != PromptStatus.OK)
             {
-                Point3d pt = ppr.Value;
-
-                // Try to snap to a COGO point elevation at this location
-                double cogoElev;
-                if (TryGetCogoElevationAt(database, pt, out cogoElev))
-                {
-                    elevation = cogoElev;
-                    pickedPoint = new Point3d(pt.X, pt.Y, cogoElev);
-                    editor.WriteMessage(string.Format(
-                        "\n  Elevation read from COGO point: {0:0.00}'", elevation));
-                    return true;
-                }
-
-                // Use the Z of the picked point (snapped elevation) if non-zero
-                if (pt.Z != 0.0)
-                {
-                    elevation = pt.Z;
-                    pickedPoint = pt;
-                    editor.WriteMessage(string.Format(
-                        "\n  Elevation from pick: {0:0.00}'", elevation));
-                    return true;
-                }
+                editor.WriteMessage("\n  No COGO point selected.");
+                return TryTypeElevation(editor, promptLabel, out elevation, out pickedPoint);
             }
 
-            // Fall back: ask for a typed value
+            // Read elevation directly from the CogoPoint entity
+            using (Transaction tr = database.TransactionManager.StartTransaction())
+            {
+                CogoPoint cogo = tr.GetObject(entResult.ObjectId, OpenMode.ForRead) as CogoPoint;
+                if (cogo == null)
+                {
+                    editor.WriteMessage("\n  Could not read COGO point. Please type the elevation.");
+                    tr.Commit();
+                    return TryTypeElevation(editor, promptLabel, out elevation, out pickedPoint);
+                }
+
+                elevation = cogo.Elevation;
+                pickedPoint = cogo.Location;
+                tr.Commit();
+            }
+
+            editor.WriteMessage(string.Format(
+                "\n  COGO point elevation: {0:0.00}'", elevation));
+            return true;
+        }
+
+        // -----------------------------------------------------------------------
+        // Typed-value path: user enters the elevation as a number.
+        // -----------------------------------------------------------------------
+        private bool TryTypeElevation(
+            Editor editor,
+            string promptLabel,
+            out double elevation,
+            out Point3d pickedPoint)
+        {
+            elevation = double.NaN;
+            pickedPoint = Point3d.Origin;
+
             PromptDoubleOptions dpo = new PromptDoubleOptions(
                 string.Format("\n  Enter {0} elevation: ", promptLabel))
             {
@@ -79,52 +124,8 @@ namespace MeasureDownLabel.Services
                 return false;
 
             elevation = dpr.Value;
-            pickedPoint = new Point3d(
-                pickedPoint.X, pickedPoint.Y, elevation);
+            pickedPoint = new Point3d(0, 0, elevation);
             return true;
-        }
-
-        // -----------------------------------------------------------------------
-        // Searches nearby COGO points and returns the elevation of the closest one
-        // within a small tolerance of the picked XY location.
-        // -----------------------------------------------------------------------
-        private bool TryGetCogoElevationAt(Database database, Point3d pickPt, out double elevation)
-        {
-            elevation = double.NaN;
-            double tolerance = 1.0; // drawing units
-
-            try
-            {
-                using (Transaction tr = database.TransactionManager.StartTransaction())
-                {
-                    BlockTableRecord modelSpace = tr.GetObject(
-                        SymbolUtilityServices.GetBlockModelSpaceId(database),
-                        OpenMode.ForRead) as BlockTableRecord;
-
-                    double bestDist = double.MaxValue;
-
-                    foreach (ObjectId id in modelSpace)
-                    {
-                        CogoPoint pt = tr.GetObject(id, OpenMode.ForRead) as CogoPoint;
-                        if (pt == null) continue;
-
-                        double dx = pt.Location.X - pickPt.X;
-                        double dy = pt.Location.Y - pickPt.Y;
-                        double dist = System.Math.Sqrt(dx * dx + dy * dy);
-
-                        if (dist < tolerance && dist < bestDist)
-                        {
-                            bestDist = dist;
-                            elevation = pt.Elevation;
-                        }
-                    }
-
-                    tr.Commit();
-                }
-            }
-            catch { /* if Civil 3D objects unavailable, fall through */ }
-
-            return !double.IsNaN(elevation);
         }
     }
 }
