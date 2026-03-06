@@ -25,9 +25,11 @@ namespace MeasureDownLabel.Services
             string bottom = input.BottomElevation.ToString("0.0");
             string size   = input.PipeSize.ToString("0.##");
 
-            // \P = MTEXT line break
+            // \H0.06; = force text height to 0.06 (overrides any style override)
+            // \P      = MTEXT paragraph break
+            // %%P     = +/- symbol
             return string.Format(
-                "TOP = {0}'\\PFL {1}\" ({2}) = {3}'%%P",
+                "\\H0.06;TOP = {0}'\\PFL {1}\" ({2}) = {3}'%%P",
                 top, size, input.PipeDirection, bottom);
         }
 
@@ -85,25 +87,27 @@ namespace MeasureDownLabel.Services
                 mleader.ContentType = ContentType.MTextContent;
 
                 // Set MText content
+                // Note: TextHeight here is the baseline; \H0.06; in the content string
+                // is the reliable override since the INLET style may override TextHeight.
                 MText mtext = new MText();
                 mtext.SetDatabaseDefaults(database);
                 mtext.Contents = content;
                 mtext.TextHeight = 0.06;
                 mleader.MText = mtext;
 
-                // IMPORTANT: set TextLocation BEFORE adding leader geometry.
-                // The MLeader uses this to anchor the text and automatically computes
-                // the dogleg from the last leader vertex to the text block.
-                // Setting it after AddLeader/AddFirstVertex causes the text to drift
-                // to the origin when the entity is reopened for editing.
-                mleader.TextLocation = input.LeaderPoint;
-
-                // Add leader line — only the arrowhead vertex is needed.
-                // The MLeader connects the leader line to TextLocation automatically
-                // via its internal dogleg, so AddLastVertex is not required.
+                // Per the ObjectARX API:
+                //   AddFirstVertex  = content/text side of the leader line
+                //   AddLastVertex   = arrowhead side of the leader line
+                // TextLocation must be set AFTER all vertices so the MLeader can
+                // determine which side of the text block to attach the leader to.
                 int leaderIdx     = mleader.AddLeader();
                 int leaderLineIdx = mleader.AddLeaderLine(leaderIdx);
-                mleader.AddFirstVertex(leaderLineIdx, input.InsertionPoint);
+
+                // Arrowhead at the structure (last vertex = arrowhead side)
+                mleader.AddLastVertex(leaderLineIdx, input.InsertionPoint);
+
+                // Text location — set after geometry so attachment side is computed correctly
+                mleader.TextLocation = input.LeaderPoint;
 
                 // Add to model space
                 BlockTableRecord modelSpace = tr.GetObject(
