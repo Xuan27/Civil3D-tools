@@ -1,5 +1,4 @@
 using System;
-using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
@@ -17,14 +16,14 @@ namespace MeasureDownLabel.Services
         /// <summary>
         /// Builds the multileader content string from the measure-down inputs.
         /// Format:  TOP = {top}'\P FL {size}" ({dir}) = {bottom}'±
-        /// \P is the MTEXT paragraph break; %%P is the ± tolerance symbol.
+        /// \P is the MTEXT paragraph break; %%P is the +/- tolerance symbol.
         /// </summary>
         public string BuildLabelText(MeasureDownInput input)
         {
             // Top elevation: 2 decimal places; Bottom (flow line): 1 decimal place
-            string top = input.TopElevation.ToString("0.00");
+            string top    = input.TopElevation.ToString("0.00");
             string bottom = input.BottomElevation.ToString("0.0");
-            string size = input.PipeSize.ToString("0.##");
+            string size   = input.PipeSize.ToString("0.##");
 
             // \P = MTEXT line break
             return string.Format(
@@ -65,19 +64,18 @@ namespace MeasureDownLabel.Services
 
             using (Transaction tr = database.TransactionManager.StartTransaction())
             {
-                // Resolve INLET style; warn but continue with default if missing
+                // Resolve INLET style; warn and continue with drawing default if missing
                 ObjectId styleId = FindInletStyle(database, tr);
                 if (styleId == ObjectId.Null)
                 {
                     editor.WriteMessage(
                         string.Format("\n  [!] MLeader style '{0}' not found - using drawing default.", InletStyleName));
-                    styleId = database.MLeaderStyleDictionaryId; // will fall back gracefully
+                    styleId = database.MLeaderStyleDictionaryId;
                 }
 
-                // Build the label text
                 string content = BuildLabelText(input);
 
-                // Create the MLeader
+                // --- Build the MLeader ---
                 MLeader mleader = new MLeader();
                 mleader.SetDatabaseDefaults(database);
 
@@ -86,28 +84,26 @@ namespace MeasureDownLabel.Services
 
                 mleader.ContentType = ContentType.MTextContent;
 
-                // Set MTEXT content
+                // Set MText content
                 MText mtext = new MText();
                 mtext.SetDatabaseDefaults(database);
                 mtext.Contents = content;
                 mtext.TextHeight = 0.06;
                 mleader.MText = mtext;
 
-                // Build leader geometry: one leader, one line with two vertices
-                int leaderIdx = mleader.AddLeader();
-                int leaderLineIdx = mleader.AddLeaderLine(leaderIdx);
-
-                // Arrow tip at the feature point (top of structure / invert point)
-                mleader.AddFirstVertex(leaderLineIdx, input.InsertionPoint);
-
-                // Landing end toward where the label sits
-                mleader.AddLastVertex(leaderLineIdx, input.LeaderPoint);
-
-                // Explicitly position the text at the landing point.
-                // The MLeader manages text location independently of MText.Location —
-                // setting it here ensures the label does not snap back to the origin
-                // when the entity is edited.
+                // IMPORTANT: set TextLocation BEFORE adding leader geometry.
+                // The MLeader uses this to anchor the text and automatically computes
+                // the dogleg from the last leader vertex to the text block.
+                // Setting it after AddLeader/AddFirstVertex causes the text to drift
+                // to the origin when the entity is reopened for editing.
                 mleader.TextLocation = input.LeaderPoint;
+
+                // Add leader line — only the arrowhead vertex is needed.
+                // The MLeader connects the leader line to TextLocation automatically
+                // via its internal dogleg, so AddLastVertex is not required.
+                int leaderIdx     = mleader.AddLeader();
+                int leaderLineIdx = mleader.AddLeaderLine(leaderIdx);
+                mleader.AddFirstVertex(leaderLineIdx, input.InsertionPoint);
 
                 // Add to model space
                 BlockTableRecord modelSpace = tr.GetObject(
@@ -122,6 +118,5 @@ namespace MeasureDownLabel.Services
 
             return placedId;
         }
-
     }
 }
