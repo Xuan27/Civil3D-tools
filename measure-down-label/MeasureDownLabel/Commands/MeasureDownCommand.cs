@@ -2,7 +2,6 @@ using System;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
-using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.Runtime;
 using MeasureDownLabel.Models;
 using MeasureDownLabel.Services;
@@ -11,7 +10,7 @@ using MeasureDownLabel.Utilities;
 namespace MeasureDownLabel.Commands
 {
     /// <summary>
-    /// AutoCAD command class for placing measure-down inlet labels as MLeaders
+    /// AutoCAD command class for populating measure-down inlet labels on existing MLeaders
     /// </summary>
     public class MeasureDownCommand
     {
@@ -20,8 +19,9 @@ namespace MeasureDownLabel.Commands
 
         /// <summary>
         /// Command: MEASUREDOWN
-        /// Guides the user through picking/entering top and bottom elevations, pipe size,
-        /// and direction, then places a formatted INLET MLeader label in the drawing.
+        /// Collects top-of-structure and flow-line elevations, pipe size, and direction,
+        /// then writes the formatted label into a user-selected existing MLeader.
+        /// The leader geometry, style, and position are completely preserved.
         /// </summary>
         [CommandMethod("MEASUREDOWN")]
         public void MeasureDown()
@@ -36,22 +36,19 @@ namespace MeasureDownLabel.Commands
             {
                 ErrorHandler.ShowBanner(editor, "MEASUREDOWN  -  Inlet Measure-Down Label");
                 editor.WriteMessage(
-                    "\n  This tool places a formatted INLET multileader label.\n" +
-                    "  Elevation inputs accept:\n" +
-                    "    Point   - click a COGO point (reads elevation + description)\n" +
-                    "    Surface - select a Civil 3D surface then pick a location\n" +
-                    "    Type    - enter a value manually\n");
+                    "\n  Collects elevation and pipe data, then writes the formatted\n" +
+                    "  label into an existing INLET multileader you select.\n" +
+                    "\n  Elevation inputs: Point (COGO) | Surface | Type\n");
 
                 // ── Step 1: Top of structure elevation ───────────────────────────
-                double topElevation;
-                Point3d topPoint;
+                double  topElevation;
                 string  topDescription;
+                Autodesk.AutoCAD.Geometry.Point3d topPoint;
 
-                editor.WriteMessage("\n  STEP 1 of 4 - Top of Structure (Rim) Elevation");
+                editor.WriteMessage("\n  STEP 1 of 3 - Top of Structure (Rim) Elevation");
 
                 if (!_elevPicker.TryGetElevation(editor, database,
-                        "Top of Structure",
-                        out topElevation, out topPoint, out topDescription))
+                        "Top of Structure", out topElevation, out topPoint, out topDescription))
                 {
                     ErrorHandler.ShowMessage(editor, "Command cancelled.");
                     return;
@@ -59,32 +56,28 @@ namespace MeasureDownLabel.Commands
 
                 // ── Step 2: Flow line (invert) elevation ─────────────────────────
                 double  bottomElevation;
-                Point3d bottomPoint;
                 string  bottomDescription;
+                Autodesk.AutoCAD.Geometry.Point3d bottomPoint;
 
-                editor.WriteMessage("\n  STEP 2 of 4 - Flow Line (Invert) Elevation");
+                editor.WriteMessage("\n  STEP 2 of 3 - Flow Line (Invert) Elevation");
 
                 if (!_elevPicker.TryGetElevation(editor, database,
-                        "Flow Line",
-                        out bottomElevation, out bottomPoint, out bottomDescription))
+                        "Flow Line", out bottomElevation, out bottomPoint, out bottomDescription))
                 {
                     ErrorHandler.ShowMessage(editor, "Command cancelled.");
                     return;
                 }
 
-                // Sanity check
                 if (bottomElevation >= topElevation)
                 {
                     ErrorHandler.ShowWarning(editor,
                         string.Format(
-                            "Flow line ({0:0.0}') is at or above top of structure ({1:0.00}'). " +
+                            "Flow line ({0:0.0}') >= top of structure ({1:0.00}'). " +
                             "Please verify your inputs.",
                             bottomElevation, topElevation));
                 }
 
-                // ── Show collected COGO descriptions as reference ─────────────────
-                // Displayed before pipe size/direction so the user can reference
-                // coded description data (e.g. pipe size/direction from field coding).
+                // ── Show COGO descriptions as reference ──────────────────────────
                 bool hasTopDesc    = !string.IsNullOrEmpty(topDescription);
                 bool hasBottomDesc = !string.IsNullOrEmpty(bottomDescription);
 
@@ -93,15 +86,15 @@ namespace MeasureDownLabel.Commands
                     editor.WriteMessage("\n\n  --- Point Reference Information ---");
                     if (hasTopDesc)
                         editor.WriteMessage(string.Format(
-                            "\n  Top point desc :  {0}", topDescription));
+                            "\n  Top point :  {0}", topDescription));
                     if (hasBottomDesc)
                         editor.WriteMessage(string.Format(
-                            "\n  FL  point desc :  {0}", bottomDescription));
+                            "\n  FL  point :  {0}", bottomDescription));
                     editor.WriteMessage("\n");
                 }
 
-                // ── Step 3: Pipe size ────────────────────────────────────────────
-                editor.WriteMessage("\n  STEP 3 of 4 - Pipe Size & Direction");
+                // ── Step 3: Pipe size & direction ────────────────────────────────
+                editor.WriteMessage("\n  STEP 3 of 3 - Pipe Size & Direction");
 
                 PromptDoubleOptions sizeOpts = new PromptDoubleOptions(
                     "\n  Pipe diameter (inches): ")
@@ -119,7 +112,6 @@ namespace MeasureDownLabel.Commands
 
                 double pipeSize = sizeResult.Value;
 
-                // ── Step 4: Pipe direction ───────────────────────────────────────
                 PromptStringOptions dirOpts = new PromptStringOptions(
                     "\n  Pipe direction (e.g. N, NE, S45W): ")
                 {
@@ -135,53 +127,15 @@ namespace MeasureDownLabel.Commands
 
                 string pipeDirection = dirResult.StringResult.Trim().ToUpper();
 
-                // ── Label placement ──────────────────────────────────────────────
-                editor.WriteMessage("\n  STEP 4 of 4 - Label Placement");
-                editor.WriteMessage("\n  Pick the arrowhead point on the structure: ");
-
-                PromptPointOptions insertOpts = new PromptPointOptions(string.Empty)
-                {
-                    AllowNone = false
-                };
-                PromptPointResult insertResult = editor.GetPoint(insertOpts);
-
-                if (insertResult.Status != PromptStatus.OK)
-                {
-                    ErrorHandler.ShowMessage(editor, "Command cancelled.");
-                    return;
-                }
-
-                Point3d arrowPoint = insertResult.Value;
-
-                editor.WriteMessage("\n  Pick where the label text should land: ");
-                PromptPointOptions landingOpts = new PromptPointOptions(string.Empty)
-                {
-                    AllowNone     = false,
-                    UseBasePoint  = true,
-                    BasePoint     = arrowPoint
-                };
-                PromptPointResult landingResult = editor.GetPoint(landingOpts);
-
-                if (landingResult.Status != PromptStatus.OK)
-                {
-                    ErrorHandler.ShowMessage(editor, "Command cancelled.");
-                    return;
-                }
-
-                Point3d labelPoint = landingResult.Value;
-
-                // ── Assemble model ───────────────────────────────────────────────
+                // ── Assemble and preview ─────────────────────────────────────────
                 MeasureDownInput input = new MeasureDownInput
                 {
                     TopElevation    = topElevation,
                     BottomElevation = bottomElevation,
                     PipeSize        = pipeSize,
-                    PipeDirection   = pipeDirection,
-                    InsertionPoint  = arrowPoint,
-                    LeaderPoint     = labelPoint
+                    PipeDirection   = pipeDirection
                 };
 
-                // ── Preview ──────────────────────────────────────────────────────
                 string preview = _mleaderSvc.BuildLabelText(input);
                 editor.WriteMessage(string.Format(
                     "\n\n  Label preview:\n    {0}\n",
@@ -189,7 +143,7 @@ namespace MeasureDownLabel.Commands
 
                 // ── Confirm ──────────────────────────────────────────────────────
                 PromptKeywordOptions confirmOpts = new PromptKeywordOptions(
-                    "\n  Place label? [Yes/No] <Yes>: ");
+                    "\n  Apply label? [Yes/No] <Yes>: ");
                 confirmOpts.Keywords.Add("Yes");
                 confirmOpts.Keywords.Add("No");
                 confirmOpts.Keywords.Default = "Yes";
@@ -202,27 +156,39 @@ namespace MeasureDownLabel.Commands
                      string.Equals(confirmResult.StringResult, "No",
                          StringComparison.OrdinalIgnoreCase)))
                 {
-                    ErrorHandler.ShowMessage(editor, "Label placement cancelled.");
+                    ErrorHandler.ShowMessage(editor, "Cancelled.");
                     return;
                 }
 
-                // ── Place MLeader ────────────────────────────────────────────────
-                ObjectId placedId = _mleaderSvc.PlaceMultiLeader(database, input, editor);
+                // ── Select existing MLeader ──────────────────────────────────────
+                PromptEntityOptions entOpts = new PromptEntityOptions(
+                    "\n  Select the INLET multileader to update: ");
+                entOpts.SetRejectMessage(
+                    "\n  That is not a multileader. Please select a multileader.");
+                entOpts.AddAllowedClass(typeof(MLeader), exactMatch: false);
 
-                if (!placedId.IsNull)
+                PromptEntityResult entResult = editor.GetEntity(entOpts);
+
+                if (entResult.Status != PromptStatus.OK)
+                {
+                    ErrorHandler.ShowMessage(editor, "No multileader selected. Cancelled.");
+                    return;
+                }
+
+                // ── Update the MLeader content ───────────────────────────────────
+                bool updated = _mleaderSvc.UpdateExistingMLeader(
+                    database, entResult.ObjectId, input, editor);
+
+                if (updated)
                 {
                     double drop = topElevation - bottomElevation;
                     ErrorHandler.ShowSuccess(editor,
                         string.Format(
-                            "Label placed.\n" +
+                            "Label updated.\n" +
                             "  Top : {0:0.00}'\n" +
                             "  FL {1}\" ({2}) = {3:0.0}'\n" +
                             "  Drop: {4:0.00}'",
                             topElevation, pipeSize, pipeDirection, bottomElevation, drop));
-                }
-                else
-                {
-                    ErrorHandler.ShowWarning(editor, "Label could not be placed. Check drawing for errors.");
                 }
 
                 editor.WriteMessage(string.Format("\n{0}\n", new string('-', 60)));
