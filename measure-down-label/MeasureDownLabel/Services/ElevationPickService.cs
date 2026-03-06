@@ -109,7 +109,7 @@ namespace MeasureDownLabel.Services
                 pickedPoint = cogo.Location;
 
                 // Build a human-readable description string
-                string desc = (cogo.Description ?? string.Empty).Trim();
+                string desc = (cogo.FullDescription ?? string.Empty).Trim();
                 string rawDesc = (cogo.RawDescription ?? string.Empty).Trim();
 
                 pointDescription = string.IsNullOrEmpty(desc) ? rawDesc : desc;
@@ -184,7 +184,7 @@ namespace MeasureDownLabel.Services
             // Step 3: query surface elevation
             using (Transaction tr = database.TransactionManager.StartTransaction())
             {
-                Surface surf = tr.GetObject(surfResult.ObjectId, OpenMode.ForRead) as Surface;
+                Autodesk.Civil.DatabaseServices.Surface surf = tr.GetObject(surfResult.ObjectId, OpenMode.ForRead) as Autodesk.Civil.DatabaseServices.Surface;
                 if (surf == null)
                 {
                     editor.WriteMessage("\n  Could not read surface — switching to manual entry.");
