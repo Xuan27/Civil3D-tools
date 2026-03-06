@@ -93,15 +93,15 @@ namespace MeasureDownLabel.Services
                 mtext.TextHeight = GetStyleTextHeight(database, tr, styleId);
                 mleader.MText = mtext;
 
-                // Build leader geometry: one leader, one segment
+                // Build leader geometry: one leader, one line with two vertices
                 int leaderIdx = mleader.AddLeader();
-                mleader.AddLeaderLine(leaderIdx);
+                int leaderLineIdx = mleader.AddLeaderLine(leaderIdx);
 
                 // Arrow tip at the feature point (top of structure / invert point)
-                mleader.SetFirstPoint(leaderIdx, 0, input.InsertionPoint);
+                mleader.AddLeaderLineVertex(leaderLineIdx, input.InsertionPoint);
 
-                // Dogleg / landing end toward where the label sits
-                mleader.SetLastPoint(leaderIdx, 0, input.LeaderPoint);
+                // Landing end toward where the label sits
+                mleader.AddLeaderLineVertex(leaderLineIdx, input.LeaderPoint);
 
                 // Add to model space
                 BlockTableRecord modelSpace = tr.GetObject(

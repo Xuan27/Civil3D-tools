@@ -205,7 +205,7 @@ namespace MeasureDownLabel.Commands
 
                 editor.WriteMessage(string.Format("\n{0}\n", new string('─', 60)));
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 ErrorHandler.HandleException(editor, ex, "MEASUREDOWN");
             }
