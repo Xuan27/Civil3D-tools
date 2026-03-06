@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ApplicationPackage
+  SchemaVersion="1.0"
+  AutodeskProduct="Civil3D"
+  ProductType="Application"
+  Name="MeasureDownLabel"
+  Description="Places formatted INLET multileader labels for measure-down structure data"
+  AppVersion="1.0.0"
+  Author="Your Name"
+  FriendlyVersion="1.0.0"
+  ProductCode="{3C9A1D2E-7F4B-4E6C-B8D1-2A5E0F9C4B7D}"
+  UpgradeCode="{3C9A1D2E-7F4B-4E6C-B8D1-2A5E0F9C4B7D}">
+
+  <CompanyDetails
+    Name="Your Company"
+    Phone=" "
+    Url=" "
+    Email=" " />
+
+  <RuntimeRequirements
+    OS="Win64"
+    Platform="Civil3D"
+    SeriesMin="R23.0"
+    SeriesMax="R25.0" />
+
+  <Components Description="Measure-Down Label Components">
+    <RuntimeRequirements
+      OS="Win64"
+      Platform="Civil3D"
+      SeriesMin="R23.0"
+      SeriesMax="R25.0" />
+
+    <ComponentEntry
+      AppName="MeasureDownLabel"
+      ModuleName="./Contents/MeasureDownLabel.dll"
+      AppDescription="Place INLET multileader labels for measure-down data"
+      LoadOnCommandInvocation="True"
+      LoadOnAutoCADStartup="True" />
+  </Components>
+</ApplicationPackage>
