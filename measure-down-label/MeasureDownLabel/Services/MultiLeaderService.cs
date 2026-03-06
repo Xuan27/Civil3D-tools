@@ -86,11 +86,13 @@ namespace MeasureDownLabel.Services
 
                 mleader.ContentType = ContentType.MTextContent;
 
-                // Set MTEXT content
+                // Set MTEXT content — Location must be set before assigning to MLeader
+                // otherwise the text anchors at the drawing origin (0,0,0)
                 MText mtext = new MText();
                 mtext.SetDatabaseDefaults(database);
                 mtext.Contents = content;
                 mtext.TextHeight = GetStyleTextHeight(database, tr, styleId);
+                mtext.Location = input.LeaderPoint;
                 mleader.MText = mtext;
 
                 // Build leader geometry: one leader, one line with two vertices
