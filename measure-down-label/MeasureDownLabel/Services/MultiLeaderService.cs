@@ -98,10 +98,10 @@ namespace MeasureDownLabel.Services
                 int leaderLineIdx = mleader.AddLeaderLine(leaderIdx);
 
                 // Arrow tip at the feature point (top of structure / invert point)
-                mleader.AddLeaderLineVertex(leaderLineIdx, input.InsertionPoint);
+                mleader.AddFirstVertex(leaderLineIdx, input.InsertionPoint);
 
                 // Landing end toward where the label sits
-                mleader.AddLeaderLineVertex(leaderLineIdx, input.LeaderPoint);
+                mleader.AddLastVertex(leaderLineIdx, input.LeaderPoint);
 
                 // Add to model space
                 BlockTableRecord modelSpace = tr.GetObject(
