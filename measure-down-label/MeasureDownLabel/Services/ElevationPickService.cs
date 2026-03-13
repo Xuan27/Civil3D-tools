@@ -127,6 +127,47 @@ namespace MeasureDownLabel.Services
                         "\n  Raw Desc:    {0}", rawDesc));
 
                 tr.Commit();
+
+                // If there is a description, offer to use a value from it
+                if (!string.IsNullOrEmpty(pointDescription))
+                {
+                    PromptKeywordOptions useDescOpts = new PromptKeywordOptions(
+                        "\n  Use invert value from description? [Yes/No] <No>: ");
+                    useDescOpts.Keywords.Add("Yes");
+                    useDescOpts.Keywords.Add("No");
+                    useDescOpts.Keywords.Default = "No";
+                    useDescOpts.AllowNone = true;
+
+                    PromptResult useDescResult = editor.GetKeywords(useDescOpts);
+
+                    if (useDescResult.Status == PromptStatus.Cancel)
+                        return false;
+
+                    bool useDesc = useDescResult.Status == PromptStatus.OK &&
+                                   string.Equals(useDescResult.StringResult, "Yes",
+                                       StringComparison.OrdinalIgnoreCase);
+
+                    if (useDesc)
+                    {
+                        PromptDoubleOptions dpo = new PromptDoubleOptions(
+                            string.Format("\n  Enter invert value from description [{0}]: ",
+                                pointDescription))
+                        {
+                            AllowNone    = false,
+                            AllowNegative = true
+                        };
+
+                        PromptDoubleResult dpr = editor.GetDouble(dpo);
+                        if (dpr.Status != PromptStatus.OK)
+                            return false;
+
+                        elevation = dpr.Value;
+                        pickedPoint = new Point3d(pickedPoint.X, pickedPoint.Y, elevation);
+
+                        editor.WriteMessage(string.Format(
+                            "\n  Using invert value: {0:0.00}'", elevation));
+                    }
+                }
             }
 
             return true;
