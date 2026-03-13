@@ -7,16 +7,21 @@ using Autodesk.Civil.DatabaseServices;
 namespace MeasureDownLabel.Services
 {
     /// <summary>
-    /// Handles interactive elevation acquisition via three modes:
+    /// Handles interactive elevation acquisition via four modes:
     ///   Point   — click directly on a COGO point (reads Elevation + Description)
     ///   Surface — select a Civil 3D surface, then pick an XY location
     ///   Type    — enter a numeric value at the keyboard
+    ///   Invert  — pick a COGO point to view its description, then type the invert
+    ///             elevation; computes and displays the drop from the top elevation
+    ///             (only available when topElevation is supplied)
     /// </summary>
     public class ElevationPickService
     {
         /// <summary>
         /// Prompts the user to choose an input method and returns the elevation,
         /// the world-space point, and (for COGO picks) the point description.
+        /// Pass <paramref name="topElevation"/> when collecting the flow-line value
+        /// so the "Invert" option is available and the drop can be shown.
         /// Returns false if the user cancels.
         /// </summary>
         public bool TryGetElevation(
@@ -25,17 +30,25 @@ namespace MeasureDownLabel.Services
             string promptLabel,
             out double elevation,
             out Point3d pickedPoint,
-            out string pointDescription)
+            out string pointDescription,
+            double topElevation = double.NaN)
         {
             elevation = double.NaN;
             pickedPoint = Point3d.Origin;
             pointDescription = string.Empty;
 
-            PromptKeywordOptions kwOpts = new PromptKeywordOptions(
-                string.Format("\n  {0} [Point/Surface/Type] <Point>: ", promptLabel));
+            bool hasTop = !double.IsNaN(topElevation);
+
+            string menuText = hasTop
+                ? string.Format("\n  {0} [Point/Surface/Type/Invert] <Point>: ", promptLabel)
+                : string.Format("\n  {0} [Point/Surface/Type] <Point>: ", promptLabel);
+
+            PromptKeywordOptions kwOpts = new PromptKeywordOptions(menuText);
             kwOpts.Keywords.Add("Point");
             kwOpts.Keywords.Add("Surface");
             kwOpts.Keywords.Add("Type");
+            if (hasTop)
+                kwOpts.Keywords.Add("Invert");
             kwOpts.Keywords.Default = "Point";
             kwOpts.AllowNone = true;
 
@@ -56,9 +69,107 @@ namespace MeasureDownLabel.Services
                 return TryTypeElevation(editor, promptLabel,
                     out elevation, out pickedPoint, out pointDescription);
 
+            if (string.Equals(choice, "Invert", StringComparison.OrdinalIgnoreCase))
+                return TryPickInvertFromDescription(editor, database, topElevation,
+                    out elevation, out pickedPoint, out pointDescription);
+
             // Default: Point
             return TryPickCogoPoint(editor, database, promptLabel,
                 out elevation, out pickedPoint, out pointDescription);
+        }
+
+        // -----------------------------------------------------------------------
+        // Invert-from-description — pick a COGO point to read its description,
+        // then the user types the invert elevation shown in that description.
+        // Displays the computed drop = topElevation - invertElevation.
+        // -----------------------------------------------------------------------
+        private bool TryPickInvertFromDescription(
+            Editor editor,
+            Database database,
+            double topElevation,
+            out double elevation,
+            out Point3d pickedPoint,
+            out string pointDescription)
+        {
+            elevation = double.NaN;
+            pickedPoint = Point3d.Origin;
+            pointDescription = string.Empty;
+
+            // Step 1: pick the COGO point (for location + description reference)
+            PromptEntityOptions entOpts = new PromptEntityOptions(
+                "\n  Click COGO point to view description: ");
+            entOpts.SetRejectMessage("\n  That is not a COGO point. Please select a COGO point.");
+            entOpts.AddAllowedClass(typeof(CogoPoint), exactMatch: false);
+
+            PromptEntityResult entResult = editor.GetEntity(entOpts);
+
+            if (entResult.Status == PromptStatus.Cancel)
+                return false;
+
+            if (entResult.Status != PromptStatus.OK)
+            {
+                editor.WriteMessage("\n  No COGO point selected — switching to manual entry.");
+                return TryTypeElevation(editor, "Flow Line",
+                    out elevation, out pickedPoint, out pointDescription);
+            }
+
+            using (Transaction tr = database.TransactionManager.StartTransaction())
+            {
+                CogoPoint cogo = tr.GetObject(entResult.ObjectId, OpenMode.ForRead) as CogoPoint;
+                if (cogo == null)
+                {
+                    editor.WriteMessage("\n  Could not read COGO point — switching to manual entry.");
+                    tr.Commit();
+                    return TryTypeElevation(editor, "Flow Line",
+                        out elevation, out pickedPoint, out pointDescription);
+                }
+
+                pickedPoint = cogo.Location;
+
+                string desc    = (cogo.FullDescription ?? string.Empty).Trim();
+                string rawDesc = (cogo.RawDescription  ?? string.Empty).Trim();
+
+                pointDescription = string.IsNullOrEmpty(desc) ? rawDesc : desc;
+
+                editor.WriteMessage(string.Format(
+                    "\n  Point #{0}  Z: {1:0.00}'",
+                    cogo.PointNumber, cogo.Elevation));
+
+                if (!string.IsNullOrEmpty(pointDescription))
+                    editor.WriteMessage(string.Format(
+                        "\n  Description: {0}", pointDescription));
+
+                if (!string.IsNullOrEmpty(rawDesc) && rawDesc != desc)
+                    editor.WriteMessage(string.Format(
+                        "\n  Raw Desc:    {0}", rawDesc));
+
+                tr.Commit();
+            }
+
+            // Step 2: user types the invert elevation from the description
+            PromptDoubleOptions dpo = new PromptDoubleOptions(
+                string.IsNullOrEmpty(pointDescription)
+                    ? "\n  Enter invert elevation: "
+                    : string.Format("\n  Enter invert elevation from description [{0}]: ",
+                        pointDescription))
+            {
+                AllowNone     = false,
+                AllowNegative = true
+            };
+
+            PromptDoubleResult dpr = editor.GetDouble(dpo);
+            if (dpr.Status != PromptStatus.OK)
+                return false;
+
+            elevation = dpr.Value;
+            pickedPoint = new Point3d(pickedPoint.X, pickedPoint.Y, elevation);
+
+            double drop = topElevation - elevation;
+            editor.WriteMessage(string.Format(
+                "\n  Invert: {0:0.00}'  |  Drop from top: {1:0.00}'",
+                elevation, drop));
+
+            return true;
         }
 
         // -----------------------------------------------------------------------
@@ -108,9 +219,8 @@ namespace MeasureDownLabel.Services
                 elevation = cogo.Elevation;
                 pickedPoint = cogo.Location;
 
-                // Build a human-readable description string
-                string desc = (cogo.FullDescription ?? string.Empty).Trim();
-                string rawDesc = (cogo.RawDescription ?? string.Empty).Trim();
+                string desc    = (cogo.FullDescription ?? string.Empty).Trim();
+                string rawDesc = (cogo.RawDescription  ?? string.Empty).Trim();
 
                 pointDescription = string.IsNullOrEmpty(desc) ? rawDesc : desc;
 
@@ -127,47 +237,6 @@ namespace MeasureDownLabel.Services
                         "\n  Raw Desc:    {0}", rawDesc));
 
                 tr.Commit();
-
-                // If there is a description, offer to use a value from it
-                if (!string.IsNullOrEmpty(pointDescription))
-                {
-                    PromptKeywordOptions useDescOpts = new PromptKeywordOptions(
-                        "\n  Use invert value from description? [Yes/No] <No>: ");
-                    useDescOpts.Keywords.Add("Yes");
-                    useDescOpts.Keywords.Add("No");
-                    useDescOpts.Keywords.Default = "No";
-                    useDescOpts.AllowNone = true;
-
-                    PromptResult useDescResult = editor.GetKeywords(useDescOpts);
-
-                    if (useDescResult.Status == PromptStatus.Cancel)
-                        return false;
-
-                    bool useDesc = useDescResult.Status == PromptStatus.OK &&
-                                   string.Equals(useDescResult.StringResult, "Yes",
-                                       StringComparison.OrdinalIgnoreCase);
-
-                    if (useDesc)
-                    {
-                        PromptDoubleOptions dpo = new PromptDoubleOptions(
-                            string.Format("\n  Enter invert value from description [{0}]: ",
-                                pointDescription))
-                        {
-                            AllowNone    = false,
-                            AllowNegative = true
-                        };
-
-                        PromptDoubleResult dpr = editor.GetDouble(dpo);
-                        if (dpr.Status != PromptStatus.OK)
-                            return false;
-
-                        elevation = dpr.Value;
-                        pickedPoint = new Point3d(pickedPoint.X, pickedPoint.Y, elevation);
-
-                        editor.WriteMessage(string.Format(
-                            "\n  Using invert value: {0:0.00}'", elevation));
-                    }
-                }
             }
 
             return true;
@@ -225,7 +294,10 @@ namespace MeasureDownLabel.Services
             // Step 3: query surface elevation
             using (Transaction tr = database.TransactionManager.StartTransaction())
             {
-                Autodesk.Civil.DatabaseServices.Surface surf = tr.GetObject(surfResult.ObjectId, OpenMode.ForRead) as Autodesk.Civil.DatabaseServices.Surface;
+                Autodesk.Civil.DatabaseServices.Surface surf =
+                    tr.GetObject(surfResult.ObjectId, OpenMode.ForRead)
+                    as Autodesk.Civil.DatabaseServices.Surface;
+
                 if (surf == null)
                 {
                     editor.WriteMessage("\n  Could not read surface — switching to manual entry.");
@@ -276,7 +348,7 @@ namespace MeasureDownLabel.Services
             PromptDoubleOptions dpo = new PromptDoubleOptions(
                 string.Format("\n  Enter {0} elevation: ", promptLabel))
             {
-                AllowNone = false,
+                AllowNone     = false,
                 AllowNegative = true
             };
 

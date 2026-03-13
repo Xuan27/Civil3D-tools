@@ -62,7 +62,8 @@ namespace MeasureDownLabel.Commands
                 editor.WriteMessage("\n  STEP 2 of 3 - Flow Line (Invert) Elevation");
 
                 if (!_elevPicker.TryGetElevation(editor, database,
-                        "Flow Line", out bottomElevation, out bottomPoint, out bottomDescription))
+                        "Flow Line", out bottomElevation, out bottomPoint, out bottomDescription,
+                        topElevation))
                 {
                     ErrorHandler.ShowMessage(editor, "Command cancelled.");
                     return;
