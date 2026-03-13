@@ -146,28 +146,28 @@ namespace MeasureDownLabel.Services
                 tr.Commit();
             }
 
-            // Step 2: user types the invert elevation from the description
+            // Step 2: user types the measure-down (cut) value from the description
             PromptDoubleOptions dpo = new PromptDoubleOptions(
                 string.IsNullOrEmpty(pointDescription)
-                    ? "\n  Enter invert elevation: "
-                    : string.Format("\n  Enter invert elevation from description [{0}]: ",
+                    ? "\n  Enter measure-down cut value: "
+                    : string.Format("\n  Enter measure-down cut value from description [{0}]: ",
                         pointDescription))
             {
                 AllowNone     = false,
-                AllowNegative = true
+                AllowNegative = false
             };
 
             PromptDoubleResult dpr = editor.GetDouble(dpo);
             if (dpr.Status != PromptStatus.OK)
                 return false;
 
-            elevation = dpr.Value;
+            double cutValue = dpr.Value;
+            elevation = topElevation - cutValue;
             pickedPoint = new Point3d(pickedPoint.X, pickedPoint.Y, elevation);
 
-            double drop = topElevation - elevation;
             editor.WriteMessage(string.Format(
-                "\n  Invert: {0:0.00}'  |  Drop from top: {1:0.00}'",
-                elevation, drop));
+                "\n  Invert: {0:0.00}' - {1:0.00}' = {2:0.0}'",
+                topElevation, cutValue, elevation));
 
             return true;
         }
