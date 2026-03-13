@@ -12,19 +12,25 @@ namespace MeasureDownLabel.Services
     {
         /// <summary>
         /// Builds the MText content string from the measure-down inputs.
-        /// Format:  TOP = {top}'\P FL {size}" ({dir}) = {bottom}'±
+        /// Format:  TOP = {top}'\P FL {size}" ({dir}) = {bottom}'±[\P FL ...]
         /// \P   = MTEXT paragraph break
         /// %%P  = ± symbol
         /// </summary>
         public string BuildLabelText(MeasureDownInput input)
         {
-            string top    = input.TopElevation.ToString("0.00");
-            string bottom = input.BottomElevation.ToString("0.0");
-            string size   = input.PipeSize.ToString("0.##");
+            string top = input.TopElevation.ToString("0.00");
 
-            return string.Format(
-                "TOP = {0}'\\PFL {1}\" ({2}) = {3}'%%P",
-                top, size, input.PipeDirection, bottom);
+            System.Text.StringBuilder sb = new System.Text.StringBuilder();
+            sb.AppendFormat("{0} = {1}'", input.StructureType, top);
+
+            foreach (FlowLineEntry fl in input.FlowLines)
+            {
+                string size   = fl.PipeSize.ToString("0.##");
+                string bottom = fl.Elevation.ToString("0.0");
+                sb.AppendFormat("\\PFL {0}\" ({1}) = {2}'%%P", size, fl.PipeDirection, bottom);
+            }
+
+            return sb.ToString();
         }
 
         /// <summary>

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
@@ -19,8 +20,8 @@ namespace MeasureDownLabel.Commands
 
         /// <summary>
         /// Command: MEASUREDOWN
-        /// Collects top-of-structure and flow-line elevations, pipe size, and direction,
-        /// then writes the formatted label into a user-selected existing MLeader.
+        /// Collects top-of-structure and one or more flow-line elevations, pipe sizes,
+        /// and directions, then writes the formatted label into a user-selected existing MLeader.
         /// The leader geometry, style, and position are completely preserved.
         /// </summary>
         [CommandMethod("MEASUREDOWN")]
@@ -38,14 +39,36 @@ namespace MeasureDownLabel.Commands
                 editor.WriteMessage(
                     "\n  Collects elevation and pipe data, then writes the formatted\n" +
                     "  label into an existing INLET multileader you select.\n" +
-                    "\n  Elevation inputs: Point (COGO) | Surface | Type\n");
+                    "\n  Elevation inputs: Point (COGO) | Surface | Type | Invert\n");
+
+                // ── Structure type ───────────────────────────────────────────────
+                PromptKeywordOptions structOpts = new PromptKeywordOptions(
+                    "\n  Structure type [TOP/INLET/RIM] <TOP>: ");
+                structOpts.Keywords.Add("TOP");
+                structOpts.Keywords.Add("INLET");
+                structOpts.Keywords.Add("RIM");
+                structOpts.Keywords.Default = "TOP";
+                structOpts.AllowNone = true;
+
+                PromptResult structResult = editor.GetKeywords(structOpts);
+
+                if (structResult.Status == PromptStatus.Cancel)
+                {
+                    ErrorHandler.ShowMessage(editor, "Command cancelled.");
+                    return;
+                }
+
+                string structureType = (structResult.Status == PromptStatus.None)
+                    ? "TOP"
+                    : structResult.StringResult.ToUpper();
 
                 // ── Step 1: Top of structure elevation ───────────────────────────
-                double  topElevation;
-                string  topDescription;
+                double topElevation;
+                string topDescription;
                 Autodesk.AutoCAD.Geometry.Point3d topPoint;
 
-                editor.WriteMessage("\n  STEP 1 of 3 - Top of Structure (Rim) Elevation");
+                editor.WriteMessage(string.Format(
+                    "\n  STEP 1 - {0} Elevation", structureType));
 
                 if (!_elevPicker.TryGetElevation(editor, database,
                         "Top of Structure", out topElevation, out topPoint, out topDescription))
@@ -54,93 +77,118 @@ namespace MeasureDownLabel.Commands
                     return;
                 }
 
-                // ── Step 2: Flow line (invert) elevation ─────────────────────────
-                double  bottomElevation;
-                string  bottomDescription;
-                Autodesk.AutoCAD.Geometry.Point3d bottomPoint;
+                if (!string.IsNullOrEmpty(topDescription))
+                    editor.WriteMessage(string.Format("\n  Top point: {0}", topDescription));
 
-                editor.WriteMessage("\n  STEP 2 of 3 - Flow Line (Invert) Elevation");
+                // ── Step 2: One or more flow-line entries ────────────────────────
+                List<FlowLineEntry> flowLines = new List<FlowLineEntry>();
+                int flIndex = 1;
 
-                if (!_elevPicker.TryGetElevation(editor, database,
-                        "Flow Line", out bottomElevation, out bottomPoint, out bottomDescription,
-                        topElevation))
+                while (true)
                 {
-                    ErrorHandler.ShowMessage(editor, "Command cancelled.");
-                    return;
-                }
+                    editor.WriteMessage(string.Format(
+                        "\n  STEP 2.{0} - Flow Line #{0} (Invert) Elevation", flIndex));
 
-                if (bottomElevation >= topElevation)
-                {
-                    ErrorHandler.ShowWarning(editor,
-                        string.Format(
-                            "Flow line ({0:0.0}') >= top of structure ({1:0.00}'). " +
-                            "Please verify your inputs.",
-                            bottomElevation, topElevation));
-                }
+                    double   flElevation;
+                    string   flDescription;
+                    Autodesk.AutoCAD.Geometry.Point3d flPoint;
 
-                // ── Show COGO descriptions as reference ──────────────────────────
-                bool hasTopDesc    = !string.IsNullOrEmpty(topDescription);
-                bool hasBottomDesc = !string.IsNullOrEmpty(bottomDescription);
+                    if (!_elevPicker.TryGetElevation(editor, database,
+                            string.Format("Flow Line #{0}", flIndex),
+                            out flElevation, out flPoint, out flDescription,
+                            topElevation))
+                    {
+                        ErrorHandler.ShowMessage(editor, "Command cancelled.");
+                        return;
+                    }
 
-                if (hasTopDesc || hasBottomDesc)
-                {
-                    editor.WriteMessage("\n\n  --- Point Reference Information ---");
-                    if (hasTopDesc)
+                    if (flElevation >= topElevation)
+                    {
+                        ErrorHandler.ShowWarning(editor,
+                            string.Format(
+                                "Flow line #{0} ({1:0.0}') >= top of structure ({2:0.00}'). " +
+                                "Please verify your inputs.",
+                                flIndex, flElevation, topElevation));
+                    }
+
+                    if (!string.IsNullOrEmpty(flDescription))
                         editor.WriteMessage(string.Format(
-                            "\n  Top point :  {0}", topDescription));
-                    if (hasBottomDesc)
-                        editor.WriteMessage(string.Format(
-                            "\n  FL  point :  {0}", bottomDescription));
-                    editor.WriteMessage("\n");
+                            "\n  FL #{0} point: {1}", flIndex, flDescription));
+
+                    // ── Pipe size & direction for this flow line ─────────────────
+                    PromptDoubleOptions sizeOpts = new PromptDoubleOptions(
+                        string.Format("\n  Pipe diameter for FL #{0} (inches): ", flIndex))
+                    {
+                        AllowNegative = false,
+                        AllowZero     = false
+                    };
+                    PromptDoubleResult sizeResult = editor.GetDouble(sizeOpts);
+
+                    if (sizeResult.Status != PromptStatus.OK)
+                    {
+                        ErrorHandler.ShowMessage(editor, "Command cancelled.");
+                        return;
+                    }
+
+                    PromptStringOptions dirOpts = new PromptStringOptions(
+                        string.Format("\n  Pipe direction for FL #{0} (e.g. N, NE, S45W): ",
+                            flIndex))
+                    {
+                        AllowSpaces = true
+                    };
+                    PromptResult dirResult = editor.GetString(dirOpts);
+
+                    if (dirResult.Status != PromptStatus.OK)
+                    {
+                        ErrorHandler.ShowMessage(editor, "Command cancelled.");
+                        return;
+                    }
+
+                    flowLines.Add(new FlowLineEntry
+                    {
+                        Elevation     = flElevation,
+                        PipeSize      = sizeResult.Value,
+                        PipeDirection = dirResult.StringResult.Trim().ToUpper()
+                    });
+
+                    flIndex++;
+
+                    // ── Ask whether to add another flow line ─────────────────────
+                    PromptKeywordOptions addMoreOpts = new PromptKeywordOptions(
+                        "\n  Add another flow line? [Yes/No] <No>: ");
+                    addMoreOpts.Keywords.Add("Yes");
+                    addMoreOpts.Keywords.Add("No");
+                    addMoreOpts.Keywords.Default = "No";
+                    addMoreOpts.AllowNone = true;
+
+                    PromptResult addMoreResult = editor.GetKeywords(addMoreOpts);
+
+                    if (addMoreResult.Status == PromptStatus.Cancel)
+                    {
+                        ErrorHandler.ShowMessage(editor, "Command cancelled.");
+                        return;
+                    }
+
+                    bool addMore = addMoreResult.Status == PromptStatus.OK &&
+                                   string.Equals(addMoreResult.StringResult, "Yes",
+                                       StringComparison.OrdinalIgnoreCase);
+
+                    if (!addMore)
+                        break;
                 }
-
-                // ── Step 3: Pipe size & direction ────────────────────────────────
-                editor.WriteMessage("\n  STEP 3 of 3 - Pipe Size & Direction");
-
-                PromptDoubleOptions sizeOpts = new PromptDoubleOptions(
-                    "\n  Pipe diameter (inches): ")
-                {
-                    AllowNegative = false,
-                    AllowZero     = false
-                };
-                PromptDoubleResult sizeResult = editor.GetDouble(sizeOpts);
-
-                if (sizeResult.Status != PromptStatus.OK)
-                {
-                    ErrorHandler.ShowMessage(editor, "Command cancelled.");
-                    return;
-                }
-
-                double pipeSize = sizeResult.Value;
-
-                PromptStringOptions dirOpts = new PromptStringOptions(
-                    "\n  Pipe direction (e.g. N, NE, S45W): ")
-                {
-                    AllowSpaces = true
-                };
-                PromptResult dirResult = editor.GetString(dirOpts);
-
-                if (dirResult.Status != PromptStatus.OK)
-                {
-                    ErrorHandler.ShowMessage(editor, "Command cancelled.");
-                    return;
-                }
-
-                string pipeDirection = dirResult.StringResult.Trim().ToUpper();
 
                 // ── Assemble and preview ─────────────────────────────────────────
                 MeasureDownInput input = new MeasureDownInput
                 {
-                    TopElevation    = topElevation,
-                    BottomElevation = bottomElevation,
-                    PipeSize        = pipeSize,
-                    PipeDirection   = pipeDirection
+                    StructureType = structureType,
+                    TopElevation  = topElevation,
+                    FlowLines     = flowLines
                 };
 
                 string preview = _mleaderSvc.BuildLabelText(input);
                 editor.WriteMessage(string.Format(
                     "\n\n  Label preview:\n    {0}\n",
-                    preview.Replace("\\P", "  |  ").Replace("%%P", "+/-")));
+                    preview.Replace("\\P", "\n    ").Replace("%%P", "+/-")));
 
                 // ── Confirm ──────────────────────────────────────────────────────
                 PromptKeywordOptions confirmOpts = new PromptKeywordOptions(
@@ -182,14 +230,18 @@ namespace MeasureDownLabel.Commands
 
                 if (updated)
                 {
-                    double drop = topElevation - bottomElevation;
-                    ErrorHandler.ShowSuccess(editor,
-                        string.Format(
-                            "Label updated.\n" +
-                            "  Top : {0:0.00}'\n" +
-                            "  FL {1}\" ({2}) = {3:0.0}'\n" +
-                            "  Drop: {4:0.00}'",
-                            topElevation, pipeSize, pipeDirection, bottomElevation, drop));
+                    System.Text.StringBuilder summary =
+                        new System.Text.StringBuilder();
+                    summary.AppendFormat("Label updated.\n  {0}: {1:0.00}'\n",
+                        structureType, topElevation);
+
+                    foreach (FlowLineEntry fl in flowLines)
+                        summary.AppendFormat(
+                            "  FL {0}\" ({1}) = {2:0.0}'  (drop {3:0.00}')\n",
+                            fl.PipeSize.ToString("0.##"), fl.PipeDirection,
+                            fl.Elevation, topElevation - fl.Elevation);
+
+                    ErrorHandler.ShowSuccess(editor, summary.ToString().TrimEnd());
                 }
 
                 editor.WriteMessage(string.Format("\n{0}\n", new string('-', 60)));
