@@ -95,58 +95,76 @@ namespace MeasureDownLabel.Services
             pickedPoint = Point3d.Origin;
             pointDescription = string.Empty;
 
-            // Step 1: pick the COGO point (for location + description reference)
-            PromptEntityOptions entOpts = new PromptEntityOptions(
-                "\n  Click COGO point to view description: ");
-            entOpts.SetRejectMessage("\n  That is not a COGO point. Please select a COGO point.");
-            entOpts.AddAllowedClass(typeof(CogoPoint), exactMatch: false);
+            // Step 1: choose whether to pick a COGO point for reference or just type the cut
+            PromptKeywordOptions modeOpts = new PromptKeywordOptions(
+                "\n  Invert input [Point/Type] <Point>: ");
+            modeOpts.Keywords.Add("Point");
+            modeOpts.Keywords.Add("Type");
+            modeOpts.Keywords.Default = "Point";
+            modeOpts.AllowNone = true;
 
-            PromptEntityResult entResult = editor.GetEntity(entOpts);
+            PromptResult modeResult = editor.GetKeywords(modeOpts);
 
-            if (entResult.Status == PromptStatus.Cancel)
+            if (modeResult.Status == PromptStatus.Cancel)
                 return false;
 
-            if (entResult.Status != PromptStatus.OK)
-            {
-                editor.WriteMessage("\n  No COGO point selected — switching to manual entry.");
-                return TryTypeElevation(editor, "Flow Line",
-                    out elevation, out pickedPoint, out pointDescription);
-            }
+            bool pickPoint = modeResult.Status == PromptStatus.None ||
+                             string.Equals(modeResult.StringResult, "Point",
+                                 StringComparison.OrdinalIgnoreCase);
 
-            using (Transaction tr = database.TransactionManager.StartTransaction())
+            if (pickPoint)
             {
-                CogoPoint cogo = tr.GetObject(entResult.ObjectId, OpenMode.ForRead) as CogoPoint;
-                if (cogo == null)
+                PromptEntityOptions entOpts = new PromptEntityOptions(
+                    "\n  Click COGO point to view description: ");
+                entOpts.SetRejectMessage(
+                    "\n  That is not a COGO point. Please select a COGO point.");
+                entOpts.AddAllowedClass(typeof(CogoPoint), exactMatch: false);
+
+                PromptEntityResult entResult = editor.GetEntity(entOpts);
+
+                if (entResult.Status == PromptStatus.Cancel)
+                    return false;
+
+                if (entResult.Status == PromptStatus.OK)
                 {
-                    editor.WriteMessage("\n  Could not read COGO point — switching to manual entry.");
-                    tr.Commit();
-                    return TryTypeElevation(editor, "Flow Line",
-                        out elevation, out pickedPoint, out pointDescription);
+                    using (Transaction tr = database.TransactionManager.StartTransaction())
+                    {
+                        CogoPoint cogo = tr.GetObject(entResult.ObjectId, OpenMode.ForRead)
+                            as CogoPoint;
+
+                        if (cogo == null)
+                        {
+                            editor.WriteMessage(
+                                "\n  Could not read COGO point — continuing to cut value entry.");
+                        }
+                        else
+                        {
+                            pickedPoint = cogo.Location;
+
+                            string desc    = (cogo.FullDescription ?? string.Empty).Trim();
+                            string rawDesc = (cogo.RawDescription  ?? string.Empty).Trim();
+
+                            pointDescription = string.IsNullOrEmpty(desc) ? rawDesc : desc;
+
+                            editor.WriteMessage(string.Format(
+                                "\n  Point #{0}  Z: {1:0.00}'",
+                                cogo.PointNumber, cogo.Elevation));
+
+                            if (!string.IsNullOrEmpty(pointDescription))
+                                editor.WriteMessage(string.Format(
+                                    "\n  Description: {0}", pointDescription));
+
+                            if (!string.IsNullOrEmpty(rawDesc) && rawDesc != desc)
+                                editor.WriteMessage(string.Format(
+                                    "\n  Raw Desc:    {0}", rawDesc));
+                        }
+
+                        tr.Commit();
+                    }
                 }
-
-                pickedPoint = cogo.Location;
-
-                string desc    = (cogo.FullDescription ?? string.Empty).Trim();
-                string rawDesc = (cogo.RawDescription  ?? string.Empty).Trim();
-
-                pointDescription = string.IsNullOrEmpty(desc) ? rawDesc : desc;
-
-                editor.WriteMessage(string.Format(
-                    "\n  Point #{0}  Z: {1:0.00}'",
-                    cogo.PointNumber, cogo.Elevation));
-
-                if (!string.IsNullOrEmpty(pointDescription))
-                    editor.WriteMessage(string.Format(
-                        "\n  Description: {0}", pointDescription));
-
-                if (!string.IsNullOrEmpty(rawDesc) && rawDesc != desc)
-                    editor.WriteMessage(string.Format(
-                        "\n  Raw Desc:    {0}", rawDesc));
-
-                tr.Commit();
             }
 
-            // Step 2: user types the measure-down (cut) value from the description
+            // Step 2: user types the measure-down (cut) value
             PromptDoubleOptions dpo = new PromptDoubleOptions(
                 string.IsNullOrEmpty(pointDescription)
                     ? "\n  Enter measure-down cut value: "
