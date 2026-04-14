@@ -39,7 +39,7 @@ namespace PtmLeader.Services
                 mtext.SetDatabaseDefaults(database);
                 mtext.TextStyleId = GetTextStyleId(database, tr, "Simplex");
                 mtext.TextHeight  = 0.06;
-                mtext.Contents    = content;
+                mtext.Contents    = "\\H0.06;" + content;
                 mtext.Location    = landingPoint;
                 mleader.MText     = mtext;
 
