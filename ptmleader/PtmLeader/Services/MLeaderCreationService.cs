@@ -38,6 +38,7 @@ namespace PtmLeader.Services
                 MText mtext = new MText();
                 mtext.SetDatabaseDefaults(database);
                 mtext.TextStyleId = database.Textstyle;
+                mtext.TextHeight  = 0.06;
                 mtext.Contents    = content;
                 mtext.Location    = landingPoint;
                 mleader.MText     = mtext;
