@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ApplicationPackage
+  SchemaVersion="1.0"
+  AutodeskProduct="Civil3D"
+  ProductType="Application"
+  Name="PtmLeader"
+  Description="Creates a multileader labelled with the point-number range of selected COGO points"
+  AppVersion="1.0.0"
+  Author="Your Name"
+  FriendlyVersion="1.0.0"
+  ProductCode="{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
+  UpgradeCode="{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}">
+
+  <CompanyDetails
+    Name="Your Company"
+    Phone=" "
+    Url=" "
+    Email=" " />
+
+  <RuntimeRequirements
+    OS="Win64"
+    Platform="Civil3D"
+    SeriesMin="R23.0"
+    SeriesMax="R25.0" />
+
+  <Components Description="PtmLeader Components">
+    <RuntimeRequirements
+      OS="Win64"
+      Platform="Civil3D"
+      SeriesMin="R23.0"
+      SeriesMax="R25.0" />
+
+    <ComponentEntry
+      AppName="PtmLeader"
+      ModuleName="./Contents/PtmLeader.dll"
+      AppDescription="Place a multileader with the COGO point-number range as content"
+      LoadOnCommandInvocation="True"
+      LoadOnAutoCADStartup="True" />
+  </Components>
+</ApplicationPackage>
