@@ -32,9 +32,7 @@ namespace PtmLeader.Services
                 MLeader mleader = new MLeader();
                 mleader.SetDatabaseDefaults(database);
 
-                // Use the drawing's current default MLeader style
-                mleader.MLeaderStyle = database.MLeaderStyle;
-                mleader.ContentType  = ContentType.MTextContent;
+                mleader.ContentType = ContentType.MTextContent;
 
                 // Build the MText block
                 MText mtext = new MText();
