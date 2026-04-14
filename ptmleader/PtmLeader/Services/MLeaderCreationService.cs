@@ -37,7 +37,7 @@ namespace PtmLeader.Services
                 // Build the MText block
                 MText mtext = new MText();
                 mtext.SetDatabaseDefaults(database);
-                mtext.TextStyleId = database.Textstyle;
+                mtext.TextStyleId = GetTextStyleId(database, tr, "Simplex");
                 mtext.TextHeight  = 0.06;
                 mtext.Contents    = content;
                 mtext.Location    = landingPoint;
@@ -56,6 +56,17 @@ namespace PtmLeader.Services
             }
 
             return true;
+        }
+
+        private ObjectId GetTextStyleId(Database database, Transaction tr, string styleName)
+        {
+            TextStyleTable tst = tr.GetObject(database.TextStyleTableId, OpenMode.ForRead)
+                as TextStyleTable;
+
+            if (tst != null && tst.Has(styleName))
+                return tst[styleName];
+
+            return database.Textstyle; // fall back to drawing default
         }
     }
 }
