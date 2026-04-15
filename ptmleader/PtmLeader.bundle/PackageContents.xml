@@ -21,14 +21,14 @@
     OS="Win64"
     Platform="Civil3D"
     SeriesMin="R23.0"
-    SeriesMax="R25.0" />
+    SeriesMax="R26.0" />
 
   <Components Description="PtmLeader Components">
     <RuntimeRequirements
       OS="Win64"
       Platform="Civil3D"
       SeriesMin="R23.0"
-      SeriesMax="R25.0" />
+      SeriesMax="R26.0" />
 
     <ComponentEntry
       AppName="PtmLeader"
