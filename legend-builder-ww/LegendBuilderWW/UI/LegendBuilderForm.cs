@@ -89,6 +89,10 @@ namespace LegendBuilderWW.UI
 
         private void UpdateSummary()
         {
+            // DataGridView raises cell-value-changed events from InitializeComponent (e.g. when
+            // HeaderText is set), so this can fire before the constructor has assigned _allRows.
+            if (_allRows == null) return;
+
             int total = _allRows.Count;
             int used = _allRows.Count(r => r.IsUsedInDrawing);
             int checkedCount = _allRows.Count(r => r.IncludeInOutput);
@@ -124,6 +128,9 @@ namespace LegendBuilderWW.UI
 
         private void OnGridCellValueChanged(object sender, DataGridViewCellEventArgs e)
         {
+            // RowIndex == -1 is a header-cell event; ignore it. These also fire during
+            // InitializeComponent before the form has any data.
+            if (e.RowIndex < 0) return;
             if (e.ColumnIndex == colInclude.Index)
             {
                 UpdateSummary();
