@@ -104,7 +104,24 @@ namespace LegendBuilderWW.Commands
                 DrawingScanner scanner = new DrawingScanner();
                 DrawingUsage usage = scanner.Scan(db);
 
-                editor.WriteMessage(string.Format("\nParsed {0} legend row(s):", rows.Count));
+                editor.WriteMessage(string.Format("\nDrawing usage tally:"));
+                editor.WriteMessage(string.Format("\n  Blocks:    {0} distinct", usage.BlockCounts.Count));
+                editor.WriteMessage(string.Format("\n  Linetypes: {0} distinct", usage.LinetypeCounts.Count));
+                editor.WriteMessage(string.Format("\n  Hatches:   {0} distinct", usage.HatchPatternCounts.Count));
+                foreach (System.Collections.Generic.KeyValuePair<string, int> kv in usage.BlockCounts)
+                {
+                    editor.WriteMessage(string.Format("\n    block: {0,-35} count={1}", kv.Key, kv.Value));
+                }
+                foreach (System.Collections.Generic.KeyValuePair<string, int> kv in usage.LinetypeCounts)
+                {
+                    editor.WriteMessage(string.Format("\n    ltype: {0,-35} count={1}", kv.Key, kv.Value));
+                }
+                foreach (System.Collections.Generic.KeyValuePair<string, int> kv in usage.HatchPatternCounts)
+                {
+                    editor.WriteMessage(string.Format("\n    hatch: {0,-35} count={1}", kv.Key, kv.Value));
+                }
+
+                editor.WriteMessage(string.Format("\n\nParsed {0} legend row(s):", rows.Count));
                 for (int i = 0; i < rows.Count; i++)
                 {
                     LegendRow r = rows[i];
