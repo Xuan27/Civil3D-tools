@@ -21,6 +21,7 @@ namespace LegendBuilderWW.UI
 
         private System.Windows.Forms.Panel panelTop;
         private System.Windows.Forms.Panel panelBottom;
+        private System.Windows.Forms.FlowLayoutPanel buttonFlow;
         private System.Windows.Forms.Label labelSummary;
         private System.Windows.Forms.Button buttonSelectUsed;
         private System.Windows.Forms.Button buttonClear;
@@ -55,6 +56,7 @@ namespace LegendBuilderWW.UI
             this.colCount = new System.Windows.Forms.DataGridViewTextBoxColumn();
 
             this.panelBottom = new System.Windows.Forms.Panel();
+            this.buttonFlow = new System.Windows.Forms.FlowLayoutPanel();
             this.labelSummary = new System.Windows.Forms.Label();
             this.buttonSelectUsed = new System.Windows.Forms.Button();
             this.buttonClear = new System.Windows.Forms.Button();
@@ -192,46 +194,41 @@ namespace LegendBuilderWW.UI
             // panelBottom
             //
             this.panelBottom.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.panelBottom.Height = 48;
+            this.panelBottom.Height = 56;
+            this.panelBottom.Controls.Add(this.buttonFlow);
             this.panelBottom.Controls.Add(this.labelSummary);
-            this.panelBottom.Controls.Add(this.buttonSelectUsed);
-            this.panelBottom.Controls.Add(this.buttonClear);
-            this.panelBottom.Controls.Add(this.buttonGenerate);
-            this.panelBottom.Controls.Add(this.buttonCancel);
+
+            //
+            // buttonFlow — docks to the right side of panelBottom, AutoSize takes the actual
+            // width of the contained buttons; FlowDirection.RightToLeft means the first control
+            // added is rightmost, so Generate appears in the dominant position.
+            //
+            this.buttonFlow.Dock = System.Windows.Forms.DockStyle.Right;
+            this.buttonFlow.FlowDirection = System.Windows.Forms.FlowDirection.RightToLeft;
+            this.buttonFlow.AutoSize = true;
+            this.buttonFlow.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
+            this.buttonFlow.Padding = new System.Windows.Forms.Padding(0, 12, 12, 12);
+            this.buttonFlow.WrapContents = false;
+            this.buttonFlow.Controls.Add(this.buttonGenerate);
+            this.buttonFlow.Controls.Add(this.buttonCancel);
+            this.buttonFlow.Controls.Add(this.buttonClear);
+            this.buttonFlow.Controls.Add(this.buttonSelectUsed);
 
             //
             // labelSummary
             //
-            this.labelSummary.AutoSize = true;
-            this.labelSummary.Location = new System.Drawing.Point(8, 18);
+            this.labelSummary.Dock = System.Windows.Forms.DockStyle.Left;
+            this.labelSummary.AutoSize = false;
+            this.labelSummary.Width = 360;
+            this.labelSummary.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            this.labelSummary.Padding = new System.Windows.Forms.Padding(8, 0, 0, 0);
             this.labelSummary.Text = "0 rows";
 
             //
-            // buttonSelectUsed
+            // buttonGenerate (primary action — rightmost in flow)
             //
-            this.buttonSelectUsed.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right;
-            this.buttonSelectUsed.Location = new System.Drawing.Point(360, 12);
-            this.buttonSelectUsed.Size = new System.Drawing.Size(120, 25);
-            this.buttonSelectUsed.Text = "Select Used Only";
-            this.buttonSelectUsed.UseVisualStyleBackColor = true;
-            this.buttonSelectUsed.Click += new System.EventHandler(this.OnSelectUsedClicked);
-
-            //
-            // buttonClear
-            //
-            this.buttonClear.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right;
-            this.buttonClear.Location = new System.Drawing.Point(486, 12);
-            this.buttonClear.Size = new System.Drawing.Size(80, 25);
-            this.buttonClear.Text = "Clear All";
-            this.buttonClear.UseVisualStyleBackColor = true;
-            this.buttonClear.Click += new System.EventHandler(this.OnClearClicked);
-
-            //
-            // buttonGenerate
-            //
-            this.buttonGenerate.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right;
-            this.buttonGenerate.Location = new System.Drawing.Point(596, 10);
-            this.buttonGenerate.Size = new System.Drawing.Size(100, 28);
+            this.buttonGenerate.Size = new System.Drawing.Size(140, 32);
+            this.buttonGenerate.Margin = new System.Windows.Forms.Padding(6, 0, 0, 0);
             this.buttonGenerate.Text = "Generate Legend";
             this.buttonGenerate.Font = new System.Drawing.Font(System.Drawing.SystemFonts.DefaultFont, System.Drawing.FontStyle.Bold);
             this.buttonGenerate.UseVisualStyleBackColor = true;
@@ -240,12 +237,29 @@ namespace LegendBuilderWW.UI
             //
             // buttonCancel
             //
-            this.buttonCancel.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right;
-            this.buttonCancel.Location = new System.Drawing.Point(706, 12);
-            this.buttonCancel.Size = new System.Drawing.Size(80, 25);
+            this.buttonCancel.Size = new System.Drawing.Size(80, 32);
+            this.buttonCancel.Margin = new System.Windows.Forms.Padding(6, 0, 0, 0);
             this.buttonCancel.Text = "Cancel";
             this.buttonCancel.UseVisualStyleBackColor = true;
             this.buttonCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
+
+            //
+            // buttonClear
+            //
+            this.buttonClear.Size = new System.Drawing.Size(80, 32);
+            this.buttonClear.Margin = new System.Windows.Forms.Padding(6, 0, 0, 0);
+            this.buttonClear.Text = "Clear All";
+            this.buttonClear.UseVisualStyleBackColor = true;
+            this.buttonClear.Click += new System.EventHandler(this.OnClearClicked);
+
+            //
+            // buttonSelectUsed
+            //
+            this.buttonSelectUsed.Size = new System.Drawing.Size(130, 32);
+            this.buttonSelectUsed.Margin = new System.Windows.Forms.Padding(6, 0, 0, 0);
+            this.buttonSelectUsed.Text = "Select Used";
+            this.buttonSelectUsed.UseVisualStyleBackColor = true;
+            this.buttonSelectUsed.Click += new System.EventHandler(this.OnSelectUsedClicked);
 
             //
             // LegendBuilderForm

@@ -180,21 +180,68 @@ namespace LegendBuilderWW.Commands
                         "\nFound {0} COGO point(s) using {1} distinct PointStyle(s).",
                         pointCount, seenStyles.Count));
 
+                    // Dump the first CogoPoint encountered, so we can see what marker info lives
+                    // on the point itself (Description, RawDescription, override flags, etc.).
+                    Autodesk.Civil.DatabaseServices.CogoPoint firstPoint = null;
+                    foreach (ObjectId id in ms)
+                    {
+                        Autodesk.AutoCAD.DatabaseServices.DBObject obj = tr.GetObject(id, OpenMode.ForRead);
+                        firstPoint = obj as Autodesk.Civil.DatabaseServices.CogoPoint;
+                        if (firstPoint != null) break;
+                    }
+                    if (firstPoint != null)
+                    {
+                        editor.WriteMessage("\n\n=== FIRST CogoPoint properties ===");
+                        DumpObjectProperties(editor, firstPoint, "  ", maxDepth: 1);
+                    }
+
+                    // Dump used point styles (already-narrowed list).
                     int dumped = 0;
                     foreach (ObjectId styleId in seenStyles)
                     {
-                        if (dumped >= 3) break;
+                        if (dumped >= 2) break;
                         Autodesk.Civil.DatabaseServices.Styles.PointStyle ps =
                             tr.GetObject(styleId, OpenMode.ForRead)
                             as Autodesk.Civil.DatabaseServices.Styles.PointStyle;
                         if (ps == null) continue;
 
+                        string nameSafe;
+                        try { nameSafe = ps.Name; } catch { nameSafe = "<getter threw>"; }
                         editor.WriteMessage(string.Format(
-                            "\n\n=== PointStyle [{0}] \"{1}\" ({2}) ===",
-                            dumped + 1, ps.Name, ps.GetType().FullName));
-                        DumpObjectProperties(editor, ps, "  ", maxDepth: 2);
+                            "\n\n=== USED PointStyle [{0}] \"{1}\" ===",
+                            dumped + 1, nameSafe));
+                        DumpObjectProperties(editor, ps, "  ", maxDepth: 1);
                         dumped++;
                     }
+
+                    // Enumerate EVERY PointStyle in the document, looking for any with a populated
+                    // MarkerSymbolName — that tells us whether the team uses block markers anywhere.
+                    editor.WriteMessage("\n\n=== ALL PointStyles in document (MarkerSymbolName scan) ===");
+                    int totalStyles = 0;
+                    int stylesWithBlock = 0;
+                    Autodesk.Civil.ApplicationServices.CivilDocument cdoc =
+                        Autodesk.Civil.ApplicationServices.CivilApplication.ActiveDocument;
+                    foreach (ObjectId psId in cdoc.Styles.PointStyles)
+                    {
+                        totalStyles++;
+                        Autodesk.Civil.DatabaseServices.Styles.PointStyle ps =
+                            tr.GetObject(psId, OpenMode.ForRead)
+                            as Autodesk.Civil.DatabaseServices.Styles.PointStyle;
+                        if (ps == null) continue;
+                        string sym = null;
+                        try { sym = ps.MarkerSymbolName; } catch { }
+                        if (!string.IsNullOrEmpty(sym))
+                        {
+                            stylesWithBlock++;
+                            string n;
+                            try { n = ps.Name; } catch { n = "<name getter threw>"; }
+                            editor.WriteMessage(string.Format(
+                                "\n  style \"{0,-40}\" MarkerSymbolName=\"{1}\"", n, sym));
+                        }
+                    }
+                    editor.WriteMessage(string.Format(
+                        "\n  Total: {0} point styles, {1} with a non-empty MarkerSymbolName.",
+                        totalStyles, stylesWithBlock));
 
                     tr.Commit();
                 }

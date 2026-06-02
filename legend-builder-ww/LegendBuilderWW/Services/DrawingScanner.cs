@@ -102,17 +102,20 @@ namespace LegendBuilderWW.Services
             }
             if (style == null) return null;
 
-            // Direct properties on PointStyle.
+            // Confirmed via LEGENDBUILDERWW_PROBESTYLE: the property is MarkerSymbolName.
+            // We keep the other candidates as fallbacks in case the API name shifts in a later
+            // Civil 3D release.
             string candidate = TryReadStringProperty(style,
-                "SymbolBlockName", "AcadBlockName", "AcadBlockSymbolName", "BlockName", "SymbolName");
+                "MarkerSymbolName", "SymbolBlockName", "AcadBlockName", "AcadBlockSymbolName",
+                "BlockName", "SymbolName");
             if (!string.IsNullOrEmpty(candidate)) return candidate;
 
-            // Some API versions expose the block via a nested Marker / SymbolStyle sub-object.
             object marker = TryReadAnyProperty(style, "Marker", "MarkerStyle", "Symbol");
             if (marker != null)
             {
                 candidate = TryReadStringProperty(marker,
-                    "SymbolBlockName", "AcadBlockName", "AcadBlockSymbolName", "BlockName", "SymbolName");
+                    "MarkerSymbolName", "SymbolBlockName", "AcadBlockName", "AcadBlockSymbolName",
+                    "BlockName", "SymbolName");
                 if (!string.IsNullOrEmpty(candidate)) return candidate;
             }
 
