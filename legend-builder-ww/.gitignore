@@ -1,0 +1,21 @@
+## Build artifacts
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+.vs/
+
+## NuGet
+*.nupkg
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## VS Code / Rider
+.vscode/
+.idea/
+*.DotSettings.user
+
+## OS noise
+Thumbs.db
+.DS_Store

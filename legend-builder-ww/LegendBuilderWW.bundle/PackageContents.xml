@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ApplicationPackage
+  SchemaVersion="1.0"
+  AutodeskProduct="Civil3D"
+  ProductType="Application"
+  Name="LegendBuilderWW"
+  Description="Westwood Legend Builder - generates legend block from symbols actually present in the drawing"
+  AppVersion="1.0.0"
+  Author="Westwood Professional Services"
+  FriendlyVersion="1.0.0"
+  ProductCode="{D7C9F1A2-4B5E-4F8C-9A0B-1E2D3F4A5B6C}"
+  UpgradeCode="{D7C9F1A2-4B5E-4F8C-9A0B-1E2D3F4A5B6C}">
+
+  <CompanyDetails
+    Name="Westwood Professional Services"
+    Phone=" "
+    Url=" "
+    Email=" " />
+
+  <RuntimeRequirements
+    OS="Win64"
+    Platform="Civil3D"
+    SeriesMin="R23.0"
+    SeriesMax="R25.0" />
+
+  <Components Description="Legend Builder WW Components">
+    <RuntimeRequirements
+      OS="Win64"
+      Platform="Civil3D"
+      SeriesMin="R23.0"
+      SeriesMax="R25.0" />
+
+    <ComponentEntry
+      AppName="LegendBuilderWW"
+      ModuleName="./Contents/LegendBuilderWW.dll"
+      AppDescription="Generate legend from drawing symbols"
+      LoadOnCommandInvocation="True"
+      LoadOnAutoCADStartup="True" />
+  </Components>
+</ApplicationPackage>
