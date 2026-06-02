@@ -230,9 +230,10 @@ namespace LegendBuilderWW.UI
             // buttonGenerate
             //
             this.buttonGenerate.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right;
-            this.buttonGenerate.Location = new System.Drawing.Point(596, 12);
-            this.buttonGenerate.Size = new System.Drawing.Size(100, 25);
-            this.buttonGenerate.Text = "Generate";
+            this.buttonGenerate.Location = new System.Drawing.Point(596, 10);
+            this.buttonGenerate.Size = new System.Drawing.Size(100, 28);
+            this.buttonGenerate.Text = "Generate Legend";
+            this.buttonGenerate.Font = new System.Drawing.Font(System.Drawing.SystemFonts.DefaultFont, System.Drawing.FontStyle.Bold);
             this.buttonGenerate.UseVisualStyleBackColor = true;
             this.buttonGenerate.Click += new System.EventHandler(this.OnGenerateClicked);
 
@@ -251,6 +252,7 @@ namespace LegendBuilderWW.UI
             //
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.AcceptButton = this.buttonGenerate;
             this.CancelButton = this.buttonCancel;
             this.ClientSize = new System.Drawing.Size(820, 560);
             this.Controls.Add(this.grid);

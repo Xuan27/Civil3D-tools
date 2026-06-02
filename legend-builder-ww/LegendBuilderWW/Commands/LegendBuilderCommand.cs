@@ -136,5 +136,113 @@ namespace LegendBuilderWW.Commands
                 ErrorHandler.HandleException(editor, ex, "LEGENDBUILDERWW_DUMP");
             }
         }
+
+        /// <summary>
+        /// Diagnostic: finds the first CogoPoint in model space and dumps every public instance
+        /// property of its PointStyle (and one level of nested object properties). Use this when
+        /// LEGENDBUILDERWW_DUMP shows zero blocks despite the drawing being full of COGO points —
+        /// the output reveals which API property holds the marker block name on this Civil 3D
+        /// version, so DrawingScanner's reflection can be pointed at it.
+        /// </summary>
+        [CommandMethod("LEGENDBUILDERWW_PROBESTYLE")]
+        public void ProbePointStyle()
+        {
+            Document doc = Application.DocumentManager.MdiActiveDocument;
+            if (doc == null) return;
+
+            Editor editor = doc.Editor;
+            Database db = doc.Database;
+
+            try
+            {
+                using (Transaction tr = db.TransactionManager.StartTransaction())
+                {
+                    BlockTable bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                    BlockTableRecord ms = (BlockTableRecord)tr.GetObject(
+                        bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+
+                    int pointCount = 0;
+                    System.Collections.Generic.HashSet<ObjectId> seenStyles =
+                        new System.Collections.Generic.HashSet<ObjectId>();
+
+                    foreach (ObjectId id in ms)
+                    {
+                        Autodesk.AutoCAD.DatabaseServices.DBObject obj =
+                            tr.GetObject(id, OpenMode.ForRead);
+                        Autodesk.Civil.DatabaseServices.CogoPoint cp =
+                            obj as Autodesk.Civil.DatabaseServices.CogoPoint;
+                        if (cp == null) continue;
+                        pointCount++;
+                        if (!cp.StyleId.IsNull) seenStyles.Add(cp.StyleId);
+                    }
+
+                    editor.WriteMessage(string.Format(
+                        "\nFound {0} COGO point(s) using {1} distinct PointStyle(s).",
+                        pointCount, seenStyles.Count));
+
+                    int dumped = 0;
+                    foreach (ObjectId styleId in seenStyles)
+                    {
+                        if (dumped >= 3) break;
+                        Autodesk.Civil.DatabaseServices.Styles.PointStyle ps =
+                            tr.GetObject(styleId, OpenMode.ForRead)
+                            as Autodesk.Civil.DatabaseServices.Styles.PointStyle;
+                        if (ps == null) continue;
+
+                        editor.WriteMessage(string.Format(
+                            "\n\n=== PointStyle [{0}] \"{1}\" ({2}) ===",
+                            dumped + 1, ps.Name, ps.GetType().FullName));
+                        DumpObjectProperties(editor, ps, "  ", maxDepth: 2);
+                        dumped++;
+                    }
+
+                    tr.Commit();
+                }
+            }
+            catch (Exception ex)
+            {
+                ErrorHandler.HandleException(editor, ex, "LEGENDBUILDERWW_PROBESTYLE");
+            }
+        }
+
+        private static void DumpObjectProperties(Editor editor, object instance, string indent, int maxDepth)
+        {
+            if (instance == null || maxDepth <= 0) return;
+            System.Reflection.PropertyInfo[] props = instance.GetType().GetProperties(
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+            foreach (System.Reflection.PropertyInfo prop in props)
+            {
+                if (prop.GetIndexParameters().Length > 0) continue;
+
+                string typeName = prop.PropertyType.Name;
+                string valueStr;
+                object value = null;
+                try
+                {
+                    value = prop.GetValue(instance, null);
+                    valueStr = value == null ? "<null>" : value.ToString();
+                }
+                catch (Exception ex)
+                {
+                    valueStr = string.Format("<getter threw: {0}>", ex.GetType().Name);
+                }
+                if (valueStr.Length > 80) valueStr = valueStr.Substring(0, 77) + "...";
+
+                editor.WriteMessage(string.Format("\n{0}{1,-22} {2,-32} = {3}", indent, typeName, prop.Name, valueStr));
+
+                // Recurse into non-primitive, non-string, non-AutoCAD-handle properties one level deep.
+                if (value != null &&
+                    maxDepth > 1 &&
+                    !prop.PropertyType.IsPrimitive &&
+                    prop.PropertyType != typeof(string) &&
+                    !prop.PropertyType.IsEnum &&
+                    !prop.PropertyType.IsValueType &&
+                    !prop.PropertyType.FullName.StartsWith("System."))
+                {
+                    DumpObjectProperties(editor, value, indent + "    ", maxDepth - 1);
+                }
+            }
+        }
     }
 }

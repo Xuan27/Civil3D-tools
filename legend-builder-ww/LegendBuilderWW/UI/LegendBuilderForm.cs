@@ -26,7 +26,7 @@ namespace LegendBuilderWW.UI
             _visibleRows = new BindingList<MatchedRow>();
             grid.DataSource = _visibleRows;
 
-            comboShow.Items.AddRange(new object[] { "Used (in drawing)", "All rows", "Unused only", "Checked only" });
+            comboShow.Items.AddRange(new object[] { "All rows", "Used (in drawing)", "Unused only", "Checked only" });
             comboShow.SelectedIndex = 0;
 
             comboType.Items.AddRange(new object[] { "All types", "Block", "Linetype", "Hatch" });
