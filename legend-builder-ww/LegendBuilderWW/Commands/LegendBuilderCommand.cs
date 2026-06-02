@@ -1,7 +1,5 @@
-using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
-using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
@@ -10,6 +8,8 @@ using LegendBuilderWW.Models;
 using LegendBuilderWW.Services;
 using LegendBuilderWW.UI;
 using LegendBuilderWW.Utilities;
+using Application = Autodesk.AutoCAD.ApplicationServices.Application;
+using Exception = System.Exception;
 
 namespace LegendBuilderWW.Commands
 {
@@ -72,7 +72,7 @@ namespace LegendBuilderWW.Commands
                     emitter.Emit(doc, form.SelectedRows);
                 }
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 ErrorHandler.HandleException(editor, ex, "LEGENDBUILDERWW");
             }
@@ -113,7 +113,7 @@ namespace LegendBuilderWW.Commands
                         i + 1, r.ColumnIndex, r.RowType, r.Key, count, r.Description));
                 }
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 ErrorHandler.HandleException(editor, ex, "LEGENDBUILDERWW_DUMP");
             }

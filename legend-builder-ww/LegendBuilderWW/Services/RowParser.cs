@@ -5,6 +5,7 @@ using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
 using LegendBuilderWW.Config;
 using LegendBuilderWW.Models;
+using RowType = LegendBuilderWW.Models.RowType;
 
 namespace LegendBuilderWW.Services
 {
