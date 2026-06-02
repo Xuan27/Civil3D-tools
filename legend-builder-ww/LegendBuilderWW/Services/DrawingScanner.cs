@@ -5,6 +5,7 @@ using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.Civil.DatabaseServices;
 using Autodesk.Civil.DatabaseServices.Styles;
 using LegendBuilderWW.Models;
+using DBObject = Autodesk.AutoCAD.DatabaseServices.DBObject;
 using Entity = Autodesk.AutoCAD.DatabaseServices.Entity;
 
 namespace LegendBuilderWW.Services
