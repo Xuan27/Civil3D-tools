@@ -172,31 +172,17 @@ namespace LegendBuilderWW.Services
                 newBtrId = bt.Add(newBtr);
                 tr.AddNewlyCreatedDBObject(newBtr, true);
 
-                // Template rows: split back into left/right columns and stack top-down so the output
-                // mirrors the template's column flow even if the user excluded some rows.
-                List<MatchedRow> templateRows = rows.Where(r => !r.Source.IsSynthetic).ToList();
-                List<MatchedRow> syntheticRows = rows.Where(r => r.Source.IsSynthetic).ToList();
+                // Re-flow all selected rows grouped by type — point/block symbols, then linetypes,
+                // then hatches — into the two columns, row-major (left, right, left, ...) top-down.
+                // OrderBy is a stable sort, so within each type the template's order is preserved and
+                // orphan rows fall at the end of their group.
+                List<MatchedRow> ordered = rows.OrderBy(r => TypeRank(r.Source.RowType)).ToList();
 
-                List<MatchedRow> leftCol = templateRows.Where(r => r.Source.ColumnIndex == 0).ToList();
-                List<MatchedRow> rightCol = templateRows.Where(r => r.Source.ColumnIndex == 1).ToList();
-
-                double leftNextY = CloneColumn(tr, leftCol, layout.LeftColumnX, layout, newBtr);
-                double rightNextY = CloneColumn(tr, rightCol, layout.RightColumnX, layout, newBtr);
-
-                // Orphan rows have no template geometry — clone a same-type template row as a
-                // prototype, retarget it, and append it to whichever column is currently shorter.
-                int leftCount = leftCol.Count;
-                int rightCount = rightCol.Count;
-                foreach (MatchedRow synth in syntheticRows)
+                for (int i = 0; i < ordered.Count; i++)
                 {
-                    bool toLeft = leftCount <= rightCount;
-                    double colX = toLeft ? layout.LeftColumnX : layout.RightColumnX;
-                    double y = toLeft ? leftNextY : rightNextY;
-
-                    EmitSyntheticRow(tr, synth.Source, allTemplateRows, colX, y, newBtr);
-
-                    if (toLeft) { leftNextY -= layout.RowPitch; leftCount++; }
-                    else { rightNextY -= layout.RowPitch; rightCount++; }
+                    double colX = (i % 2 == 0) ? layout.LeftColumnX : layout.RightColumnX;
+                    double y = -(i / 2) * layout.RowPitch;
+                    PlaceRow(tr, ordered[i].Source, allTemplateRows, colX, y, newBtr);
                 }
 
                 CloneTitle(tr, titleEntityIds, templateTopRowY, newBtr);
@@ -205,6 +191,41 @@ namespace LegendBuilderWW.Services
             }
 
             return newBtrId;
+        }
+
+        /// <summary>Type grouping order for the output: point/block symbols, then linetypes, then hatches.</summary>
+        private static int TypeRank(RowType type)
+        {
+            switch (type)
+            {
+                case RowType.Block: return 0;
+                case RowType.Linetype: return 1;
+                case RowType.Hatch: return 2;
+                default: return 3;
+            }
+        }
+
+        /// <summary>
+        /// Places one row at (columnX, y): a template row is cloned and translated there; a synthetic
+        /// orphan row is built from a same-type prototype at that spot.
+        /// </summary>
+        private static void PlaceRow(
+            Transaction tr,
+            LegendRow row,
+            List<LegendRow> allTemplateRows,
+            double columnX,
+            double y,
+            BlockTableRecord target)
+        {
+            if (row.IsSynthetic)
+            {
+                EmitSyntheticRow(tr, row, allTemplateRows, columnX, y, target);
+                return;
+            }
+
+            Vector3d offset = new Vector3d(columnX - row.RowOrigin.X, y - row.RowOrigin.Y, 0);
+            CloneEntitiesInto(tr, row.SymbolEntityIds, target, offset);
+            CloneEntitiesInto(tr, new List<ObjectId> { row.DescriptionEntityId }, target, offset);
         }
 
         /// <summary>
@@ -316,34 +337,6 @@ namespace LegendBuilderWW.Services
 
             Vector3d offset = new Vector3d(0, -templateTopRowY, 0);
             CloneEntitiesInto(tr, titleEntityIds, target, offset);
-        }
-
-        /// <summary>
-        /// Clones a column of template rows top-down and returns the Y where the next row would go,
-        /// so orphan rows can be appended below.
-        /// </summary>
-        private static double CloneColumn(
-            Transaction tr,
-            List<MatchedRow> column,
-            double newColumnX,
-            RowLayout layout,
-            BlockTableRecord target)
-        {
-            double currentY = 0;
-            for (int i = 0; i < column.Count; i++)
-            {
-                LegendRow row = column[i].Source;
-                Vector3d offset = new Vector3d(
-                    newColumnX - row.RowOrigin.X,
-                    currentY - row.RowOrigin.Y,
-                    0);
-
-                CloneEntitiesInto(tr, row.SymbolEntityIds, target, offset);
-                CloneEntitiesInto(tr, new List<ObjectId> { row.DescriptionEntityId }, target, offset);
-
-                currentY -= layout.RowPitch;
-            }
-            return currentY;
         }
 
         private static List<Entity> CloneEntitiesInto(
