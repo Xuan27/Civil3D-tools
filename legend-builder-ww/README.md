@@ -25,11 +25,11 @@ The command is named **`LEGENDBUILDERWW`** specifically to avoid colliding with 
 2. Switch to a paper-space layout (Model space is not a valid target).
 3. Run `LEGENDBUILDERWW`.
 4. When prompted, **select the SincpacC3D symbols table**. The plugin reads the block name out of each symbol cell, reads the **Vertical Legend** template block (from the current drawing if present, otherwise from the configured source DWG), and opens a dialog.
-5. Rows whose block appears in the table are pre-checked; unused rows appear unchecked so you can force-include a symbol you are about to add.
+5. Rows whose block appears in the table are pre-checked; unused rows appear unchecked so you can force-include a symbol you are about to add. Symbols used in the drawing but missing from the template ("orphans") are added unchecked too — tick them to append them.
 6. Filter the list with the `Show` and `Type` dropdowns and the search box, adjust checkboxes, and click `Generate`.
-7. Pick an insertion point in paper space. The plugin creates a new `LEGEND_WW_<timestamp>` block and inserts one reference at the point.
+7. At the insertion prompt, pick a point in paper space — or type `S`/`T` to switch between **Single-column** and **Two-column** layout (remembered for next time). The plugin creates a new `LEGEND_WW_<timestamp>` block and inserts one reference at the point.
 
-Each run produces a fresh block — the plugin never edits an existing legend in place.
+The output is grouped by type — point/block symbols first, then linetypes, then hatches — laid out column-major (left column fills top-to-bottom, then the right). Each run produces a fresh block — the plugin never edits an existing legend in place.
 
 ## Settings
 

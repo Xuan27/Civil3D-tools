@@ -49,10 +49,6 @@ namespace LegendBuilderWW.Services
                 .ToList();
             RowLayout layout = ComputeLayout(allTemplateRows);
 
-            string newBlockName = BuildOutputBlockName();
-            ObjectId newBtrId = CreateOutputBlock(
-                db, newBlockName, rows, allTemplateRows, layout, titleEntityIds, templateTopRowY);
-
             ObjectId paperSpaceId = GetActivePaperSpaceId(db);
             if (paperSpaceId.IsNull)
             {
@@ -60,13 +56,26 @@ namespace LegendBuilderWW.Services
                 return;
             }
 
-            Point3d insertPoint = PromptInsertionPoint(editor);
-            if (insertPoint.Equals(Point3d.Origin) && !PromptedPointWasValid)
+            // Pick the insertion point; the same prompt offers a keyword to switch single/two-column.
+            bool singleColumn = _settings.SingleColumn;
+            Point3d insertPoint = PromptInsertionPoint(editor, ref singleColumn);
+            if (!PromptedPointWasValid)
             {
                 return;
             }
 
+            string newBlockName = BuildOutputBlockName();
+            ObjectId newBtrId = CreateOutputBlock(
+                db, newBlockName, rows, allTemplateRows, layout, titleEntityIds, templateTopRowY, singleColumn);
+
             InsertBlockReference(db, paperSpaceId, newBtrId, insertPoint);
+
+            // Remember the column choice for next time.
+            if (_settings.SingleColumn != singleColumn)
+            {
+                _settings.SingleColumn = singleColumn;
+                try { _settings.Save(); } catch { /* preference is best-effort */ }
+            }
 
             editor.WriteMessage(string.Format(
                 "\nLegend '{0}' created with {1} row(s).",
@@ -75,13 +84,27 @@ namespace LegendBuilderWW.Services
 
         private bool PromptedPointWasValid;
 
-        private Point3d PromptInsertionPoint(Editor editor)
+        private Point3d PromptInsertionPoint(Editor editor, ref bool singleColumn)
         {
-            PromptPointOptions opts = new PromptPointOptions("\nSpecify legend insertion point: ");
-            opts.AllowNone = false;
-            PromptPointResult res = editor.GetPoint(opts);
-            PromptedPointWasValid = res.Status == PromptStatus.OK;
-            return PromptedPointWasValid ? res.Value : Point3d.Origin;
+            while (true)
+            {
+                PromptPointOptions opts = new PromptPointOptions(string.Format(
+                    "\nSpecify legend insertion point or layout [Single-column/Two-column] <{0}>: ",
+                    singleColumn ? "Single" : "Two"));
+                opts.AllowNone = false;
+                opts.Keywords.Add("Single");
+                opts.Keywords.Add("Two");
+
+                PromptPointResult res = editor.GetPoint(opts);
+                if (res.Status == PromptStatus.Keyword)
+                {
+                    singleColumn = string.Equals(res.StringResult, "Single", StringComparison.OrdinalIgnoreCase);
+                    continue;
+                }
+
+                PromptedPointWasValid = res.Status == PromptStatus.OK;
+                return PromptedPointWasValid ? res.Value : Point3d.Origin;
+            }
         }
 
         private string BuildOutputBlockName()
@@ -147,7 +170,8 @@ namespace LegendBuilderWW.Services
             List<LegendRow> allTemplateRows,
             RowLayout layout,
             List<ObjectId> titleEntityIds,
-            double templateTopRowY)
+            double templateTopRowY,
+            bool singleColumn)
         {
             ObjectId newBtrId;
 
@@ -173,15 +197,21 @@ namespace LegendBuilderWW.Services
                 tr.AddNewlyCreatedDBObject(newBtr, true);
 
                 // Re-flow all selected rows grouped by type — point/block symbols, then linetypes,
-                // then hatches — into the two columns, row-major (left, right, left, ...) top-down.
-                // OrderBy is a stable sort, so within each type the template's order is preserved and
-                // orphan rows fall at the end of their group.
+                // then hatches. OrderBy is a stable sort, so within each type the template's order is
+                // preserved and orphan rows fall at the end of their group. Layout is column-major:
+                // the left column fills top-to-bottom, then the right (or one tall column if single).
                 List<MatchedRow> ordered = rows.OrderBy(r => TypeRank(r.Source.RowType)).ToList();
 
-                for (int i = 0; i < ordered.Count; i++)
+                int total = ordered.Count;
+                int rowsPerColumn = singleColumn ? total : (total + 1) / 2;
+                if (rowsPerColumn < 1) rowsPerColumn = 1;
+
+                for (int i = 0; i < total; i++)
                 {
-                    double colX = (i % 2 == 0) ? layout.LeftColumnX : layout.RightColumnX;
-                    double y = -(i / 2) * layout.RowPitch;
+                    int col = i / rowsPerColumn;            // 0 = left, 1 = right
+                    int slot = i - col * rowsPerColumn;
+                    double colX = (col == 0) ? layout.LeftColumnX : layout.RightColumnX;
+                    double y = -slot * layout.RowPitch;
                     PlaceRow(tr, ordered[i].Source, allTemplateRows, colX, y, newBtr);
                 }
 

@@ -3,5 +3,6 @@
   "SourceBlockName": "Vertical Legend",
   "OutputBlockNamePrefix": "LEGEND_WW_",
   "RowGroupingTolerance": 0.2,
+  "SingleColumn": false,
   "TitleEntityYThreshold": null
 }

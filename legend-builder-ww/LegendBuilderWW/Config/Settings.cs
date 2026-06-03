@@ -17,6 +17,13 @@ namespace LegendBuilderWW.Config
         public double RowGroupingTolerance { get; set; }
 
         /// <summary>
+        /// When true the legend is emitted as a single column; otherwise two columns (column-major:
+        /// the left column fills top-to-bottom, then the right). Remembers the last choice made at
+        /// the insertion prompt.
+        /// </summary>
+        public bool SingleColumn { get; set; }
+
+        /// <summary>
         /// Optional Y threshold. Entities above this Y in the template block are treated as the legend title
         /// (LEGEND text + green bar) and skipped during row parsing. Null = auto-detect.
         /// </summary>
