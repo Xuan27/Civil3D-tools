@@ -11,6 +11,9 @@ using LegendBuilderWW.UI;
 using LegendBuilderWW.Utilities;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;
 using Exception = System.Exception;
+// Alias to disambiguate from Autodesk.AutoCAD.DatabaseServices.RowType, and to avoid the
+// namespace name "LegendBuilderWW" colliding with this class's LegendBuilderWW() method.
+using RowType = LegendBuilderWW.Models.RowType;
 
 namespace LegendBuilderWW.Commands
 {
@@ -274,7 +277,7 @@ namespace LegendBuilderWW.Commands
                 new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
             foreach (LegendRow r in templateRows)
             {
-                if (r.RowType == LegendBuilderWW.Models.RowType.Block && !string.IsNullOrEmpty(r.Key))
+                if (r.RowType == RowType.Block && !string.IsNullOrEmpty(r.Key))
                 {
                     templateBlocks.Add(r.Key);
                 }
