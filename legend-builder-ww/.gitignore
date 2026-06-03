@@ -19,3 +19,6 @@ artifacts/
 ## OS noise
 Thumbs.db
 .DS_Store
+
+## Reference design images (local only)
+Images/

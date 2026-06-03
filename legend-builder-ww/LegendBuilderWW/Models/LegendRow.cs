@@ -15,7 +15,7 @@ namespace LegendBuilderWW.Models
 
         /// <summary>
         /// Matching key. Block name for RowType.Block, linetype name for Linetype, hatch pattern for Hatch.
-        /// Compared case-insensitively against DrawingScanner output.
+        /// Compared case-insensitively against the block tally read from the SincpacC3D table.
         /// </summary>
         public string Key { get; set; }
 

@@ -4,8 +4,8 @@ using System.Collections.Generic;
 namespace LegendBuilderWW.Models
 {
     /// <summary>
-    /// Counts of distinct keys actually used in model space, indexed case-insensitively.
-    /// Populated once by DrawingScanner and consumed by LegendMatcher.
+    /// Counts of distinct symbols in use, indexed case-insensitively.
+    /// Populated from the SincpacC3D symbols table by SincpacTableReader and consumed by LegendMatcher.
     /// </summary>
     public class DrawingUsage
     {

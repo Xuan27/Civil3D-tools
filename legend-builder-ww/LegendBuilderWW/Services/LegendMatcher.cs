@@ -4,7 +4,8 @@ using LegendBuilderWW.Models;
 namespace LegendBuilderWW.Services
 {
     /// <summary>
-    /// Joins parsed template rows with DrawingScanner output. Rows that are used in the drawing
+    /// Joins parsed template rows with the block tally read from the SincpacC3D symbols table
+    /// (SincpacTableReader). Rows that are used in the drawing
     /// are returned pre-checked; rows that aren't are still included (unchecked) so the user can
     /// force-include symbols they're about to place.
     /// </summary>

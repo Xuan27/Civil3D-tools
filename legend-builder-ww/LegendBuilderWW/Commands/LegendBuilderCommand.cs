@@ -17,6 +17,11 @@ namespace LegendBuilderWW.Commands
     /// <summary>
     /// AutoCAD command entry points for LegendBuilderWW.
     /// LEGENDBUILDERWW is named to avoid clashing with Civil 3D's built-in LegendBuilder.
+    ///
+    /// Workflow: the user first runs SincpacC3D's LegendBuilder to produce a symbols Table (which
+    /// reliably captures every used symbol — blocks, xrefs, pipe structures, COGO markers). Our
+    /// command then reads the block names out of that table to learn what's in use, matches them
+    /// against the Vertical Legend template, and emits a clean legend block.
     /// </summary>
     public class LegendBuilderCommand
     {
@@ -54,8 +59,14 @@ namespace LegendBuilderWW.Commands
                     return;
                 }
 
-                DrawingScanner scanner = new DrawingScanner();
-                DrawingUsage usage = scanner.Scan(db);
+                ObjectId tableId = PromptForSincpacTable(editor);
+                if (tableId.IsNull)
+                {
+                    ErrorHandler.ShowMessage(editor, "Legend Builder cancelled — no table selected.");
+                    return;
+                }
+
+                DrawingUsage usage = new SincpacTableReader().Read(db, tableId);
 
                 LegendMatcher matcher = new LegendMatcher();
                 List<MatchedRow> matched = matcher.Match(templateRows, usage);
@@ -80,8 +91,24 @@ namespace LegendBuilderWW.Commands
         }
 
         /// <summary>
-        /// Diagnostic command: dumps every parsed row from the template to the AutoCAD command line.
-        /// Useful for validating the parser against the real Vertical Legend block without running the GUI.
+        /// Prompts the user to select the SincpacC3D symbols Table on screen. Returns ObjectId.Null
+        /// if the user cancels or picks nothing.
+        /// </summary>
+        private static ObjectId PromptForSincpacTable(Editor editor)
+        {
+            PromptEntityOptions opts = new PromptEntityOptions(
+                "\nSelect the SincpacC3D symbols table: ");
+            opts.SetRejectMessage("\nThat is not a table — select the symbols table created by SincpacC3D.");
+            opts.AddAllowedClass(typeof(Table), false);
+
+            PromptEntityResult res = editor.GetEntity(opts);
+            return res.Status == PromptStatus.OK ? res.ObjectId : ObjectId.Null;
+        }
+
+        /// <summary>
+        /// Diagnostic: dumps the block tally read from the selected SincpacC3D table alongside every
+        /// parsed template row and its match count. Use this to confirm the block names inside the
+        /// table match the template's row keys without running the full GUI.
         /// </summary>
         [CommandMethod("LEGENDBUILDERWW_DUMP")]
         public void DumpRows()
@@ -101,24 +128,20 @@ namespace LegendBuilderWW.Commands
                 RowParser parser = new RowParser(settings);
                 List<LegendRow> rows = parser.Parse(db, templateBtrId);
 
-                DrawingScanner scanner = new DrawingScanner();
-                DrawingUsage usage = scanner.Scan(db);
+                ObjectId tableId = PromptForSincpacTable(editor);
+                if (tableId.IsNull)
+                {
+                    ErrorHandler.ShowMessage(editor, "Dump cancelled — no table selected.");
+                    return;
+                }
 
-                editor.WriteMessage(string.Format("\nDrawing usage tally:"));
-                editor.WriteMessage(string.Format("\n  Blocks:    {0} distinct", usage.BlockCounts.Count));
-                editor.WriteMessage(string.Format("\n  Linetypes: {0} distinct", usage.LinetypeCounts.Count));
-                editor.WriteMessage(string.Format("\n  Hatches:   {0} distinct", usage.HatchPatternCounts.Count));
-                foreach (System.Collections.Generic.KeyValuePair<string, int> kv in usage.BlockCounts)
+                DrawingUsage usage = new SincpacTableReader().Read(db, tableId);
+
+                editor.WriteMessage("\nBlock tally read from SincpacC3D table:");
+                editor.WriteMessage(string.Format("\n  Blocks: {0} distinct", usage.BlockCounts.Count));
+                foreach (KeyValuePair<string, int> kv in usage.BlockCounts)
                 {
                     editor.WriteMessage(string.Format("\n    block: {0,-35} count={1}", kv.Key, kv.Value));
-                }
-                foreach (System.Collections.Generic.KeyValuePair<string, int> kv in usage.LinetypeCounts)
-                {
-                    editor.WriteMessage(string.Format("\n    ltype: {0,-35} count={1}", kv.Key, kv.Value));
-                }
-                foreach (System.Collections.Generic.KeyValuePair<string, int> kv in usage.HatchPatternCounts)
-                {
-                    editor.WriteMessage(string.Format("\n    hatch: {0,-35} count={1}", kv.Key, kv.Value));
                 }
 
                 editor.WriteMessage(string.Format("\n\nParsed {0} legend row(s):", rows.Count));
@@ -134,161 +157,6 @@ namespace LegendBuilderWW.Commands
             catch (Exception ex)
             {
                 ErrorHandler.HandleException(editor, ex, "LEGENDBUILDERWW_DUMP");
-            }
-        }
-
-        /// <summary>
-        /// Diagnostic: finds the first CogoPoint in model space and dumps every public instance
-        /// property of its PointStyle (and one level of nested object properties). Use this when
-        /// LEGENDBUILDERWW_DUMP shows zero blocks despite the drawing being full of COGO points —
-        /// the output reveals which API property holds the marker block name on this Civil 3D
-        /// version, so DrawingScanner's reflection can be pointed at it.
-        /// </summary>
-        [CommandMethod("LEGENDBUILDERWW_PROBESTYLE")]
-        public void ProbePointStyle()
-        {
-            Document doc = Application.DocumentManager.MdiActiveDocument;
-            if (doc == null) return;
-
-            Editor editor = doc.Editor;
-            Database db = doc.Database;
-
-            try
-            {
-                using (Transaction tr = db.TransactionManager.StartTransaction())
-                {
-                    BlockTable bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
-                    BlockTableRecord ms = (BlockTableRecord)tr.GetObject(
-                        bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
-
-                    int pointCount = 0;
-                    System.Collections.Generic.HashSet<ObjectId> seenStyles =
-                        new System.Collections.Generic.HashSet<ObjectId>();
-
-                    foreach (ObjectId id in ms)
-                    {
-                        Autodesk.AutoCAD.DatabaseServices.DBObject obj =
-                            tr.GetObject(id, OpenMode.ForRead);
-                        Autodesk.Civil.DatabaseServices.CogoPoint cp =
-                            obj as Autodesk.Civil.DatabaseServices.CogoPoint;
-                        if (cp == null) continue;
-                        pointCount++;
-                        if (!cp.StyleId.IsNull) seenStyles.Add(cp.StyleId);
-                    }
-
-                    editor.WriteMessage(string.Format(
-                        "\nFound {0} COGO point(s) using {1} distinct PointStyle(s).",
-                        pointCount, seenStyles.Count));
-
-                    // Dump the first CogoPoint encountered, so we can see what marker info lives
-                    // on the point itself (Description, RawDescription, override flags, etc.).
-                    Autodesk.Civil.DatabaseServices.CogoPoint firstPoint = null;
-                    foreach (ObjectId id in ms)
-                    {
-                        Autodesk.AutoCAD.DatabaseServices.DBObject obj = tr.GetObject(id, OpenMode.ForRead);
-                        firstPoint = obj as Autodesk.Civil.DatabaseServices.CogoPoint;
-                        if (firstPoint != null) break;
-                    }
-                    if (firstPoint != null)
-                    {
-                        editor.WriteMessage("\n\n=== FIRST CogoPoint properties ===");
-                        DumpObjectProperties(editor, firstPoint, "  ", maxDepth: 1);
-                    }
-
-                    // Dump used point styles (already-narrowed list).
-                    int dumped = 0;
-                    foreach (ObjectId styleId in seenStyles)
-                    {
-                        if (dumped >= 2) break;
-                        Autodesk.Civil.DatabaseServices.Styles.PointStyle ps =
-                            tr.GetObject(styleId, OpenMode.ForRead)
-                            as Autodesk.Civil.DatabaseServices.Styles.PointStyle;
-                        if (ps == null) continue;
-
-                        string nameSafe;
-                        try { nameSafe = ps.Name; } catch { nameSafe = "<getter threw>"; }
-                        editor.WriteMessage(string.Format(
-                            "\n\n=== USED PointStyle [{0}] \"{1}\" ===",
-                            dumped + 1, nameSafe));
-                        DumpObjectProperties(editor, ps, "  ", maxDepth: 1);
-                        dumped++;
-                    }
-
-                    // Enumerate EVERY PointStyle in the document, looking for any with a populated
-                    // MarkerSymbolName — that tells us whether the team uses block markers anywhere.
-                    editor.WriteMessage("\n\n=== ALL PointStyles in document (MarkerSymbolName scan) ===");
-                    int totalStyles = 0;
-                    int stylesWithBlock = 0;
-                    Autodesk.Civil.ApplicationServices.CivilDocument cdoc =
-                        Autodesk.Civil.ApplicationServices.CivilApplication.ActiveDocument;
-                    foreach (ObjectId psId in cdoc.Styles.PointStyles)
-                    {
-                        totalStyles++;
-                        Autodesk.Civil.DatabaseServices.Styles.PointStyle ps =
-                            tr.GetObject(psId, OpenMode.ForRead)
-                            as Autodesk.Civil.DatabaseServices.Styles.PointStyle;
-                        if (ps == null) continue;
-                        string sym = null;
-                        try { sym = ps.MarkerSymbolName; } catch { }
-                        if (!string.IsNullOrEmpty(sym))
-                        {
-                            stylesWithBlock++;
-                            string n;
-                            try { n = ps.Name; } catch { n = "<name getter threw>"; }
-                            editor.WriteMessage(string.Format(
-                                "\n  style \"{0,-40}\" MarkerSymbolName=\"{1}\"", n, sym));
-                        }
-                    }
-                    editor.WriteMessage(string.Format(
-                        "\n  Total: {0} point styles, {1} with a non-empty MarkerSymbolName.",
-                        totalStyles, stylesWithBlock));
-
-                    tr.Commit();
-                }
-            }
-            catch (Exception ex)
-            {
-                ErrorHandler.HandleException(editor, ex, "LEGENDBUILDERWW_PROBESTYLE");
-            }
-        }
-
-        private static void DumpObjectProperties(Editor editor, object instance, string indent, int maxDepth)
-        {
-            if (instance == null || maxDepth <= 0) return;
-            System.Reflection.PropertyInfo[] props = instance.GetType().GetProperties(
-                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-
-            foreach (System.Reflection.PropertyInfo prop in props)
-            {
-                if (prop.GetIndexParameters().Length > 0) continue;
-
-                string typeName = prop.PropertyType.Name;
-                string valueStr;
-                object value = null;
-                try
-                {
-                    value = prop.GetValue(instance, null);
-                    valueStr = value == null ? "<null>" : value.ToString();
-                }
-                catch (Exception ex)
-                {
-                    valueStr = string.Format("<getter threw: {0}>", ex.GetType().Name);
-                }
-                if (valueStr.Length > 80) valueStr = valueStr.Substring(0, 77) + "...";
-
-                editor.WriteMessage(string.Format("\n{0}{1,-22} {2,-32} = {3}", indent, typeName, prop.Name, valueStr));
-
-                // Recurse into non-primitive, non-string, non-AutoCAD-handle properties one level deep.
-                if (value != null &&
-                    maxDepth > 1 &&
-                    !prop.PropertyType.IsPrimitive &&
-                    prop.PropertyType != typeof(string) &&
-                    !prop.PropertyType.IsEnum &&
-                    !prop.PropertyType.IsValueType &&
-                    !prop.PropertyType.FullName.StartsWith("System."))
-                {
-                    DumpObjectProperties(editor, value, indent + "    ", maxDepth - 1);
-                }
             }
         }
     }
