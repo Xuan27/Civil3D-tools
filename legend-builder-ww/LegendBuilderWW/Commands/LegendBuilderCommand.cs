@@ -51,25 +51,29 @@ namespace LegendBuilderWW.Commands
                 }
 
                 RowParser parser = new RowParser(settings);
-                List<LegendRow> templateRows = parser.Parse(db, templateBtrId);
-                if (templateRows.Count == 0)
+                TemplateParse parse = parser.Parse(db, templateBtrId);
+                if (parse.Rows.Count == 0)
                 {
                     ErrorHandler.ShowWarning(editor,
                         "No legend rows were parsed from the template. Check the source block contents.");
                     return;
                 }
 
-                ObjectId tableId = PromptForSincpacTable(editor);
+                ObjectId tableId = PromptForSincpacTable(editor, db);
                 if (tableId.IsNull)
                 {
+                    ReportTablesInDrawing(editor, db);
                     ErrorHandler.ShowMessage(editor, "Legend Builder cancelled — no table selected.");
                     return;
                 }
 
+                // Blocks (incl. point markers / pipe structures) come from the SincpacC3D table;
+                // linetypes and hatches come from a plain model-space scan and merge into the tally.
                 DrawingUsage usage = new SincpacTableReader().Read(db, tableId);
+                new LinetypeHatchScanner().ScanInto(db, usage);
 
                 LegendMatcher matcher = new LegendMatcher();
-                List<MatchedRow> matched = matcher.Match(templateRows, usage);
+                List<MatchedRow> matched = matcher.Match(parse.Rows, usage);
 
                 using (LegendBuilderForm form = new LegendBuilderForm(matched, settings))
                 {
@@ -81,7 +85,7 @@ namespace LegendBuilderWW.Commands
                     }
 
                     LegendEmitter emitter = new LegendEmitter(settings);
-                    emitter.Emit(doc, form.SelectedRows);
+                    emitter.Emit(doc, matched, parse.TitleEntityIds, parse.TopRowOriginY);
                 }
             }
             catch (Exception ex)
@@ -92,17 +96,84 @@ namespace LegendBuilderWW.Commands
 
         /// <summary>
         /// Prompts the user to select the SincpacC3D symbols Table on screen. Returns ObjectId.Null
-        /// if the user cancels or picks nothing.
+        /// if the user cancels, picks nothing, or picks something that is not an AutoCAD table.
+        ///
+        /// No pick-time class filter is used on purpose: with a filter, picking a non-table object is
+        /// rejected silently and is easily confused with picking empty space. Instead we accept any
+        /// entity and report its actual class name, which tells us exactly what SincpacC3D produced
+        /// when the pick is not a table.
         /// </summary>
-        private static ObjectId PromptForSincpacTable(Editor editor)
+        private static ObjectId PromptForSincpacTable(Editor editor, Database db)
         {
             PromptEntityOptions opts = new PromptEntityOptions(
                 "\nSelect the SincpacC3D symbols table: ");
-            opts.SetRejectMessage("\nThat is not a table — select the symbols table created by SincpacC3D.");
-            opts.AddAllowedClass(typeof(Table), false);
+            opts.AllowNone = false;
 
             PromptEntityResult res = editor.GetEntity(opts);
-            return res.Status == PromptStatus.OK ? res.ObjectId : ObjectId.Null;
+            if (res.Status != PromptStatus.OK) return ObjectId.Null;
+
+            using (Transaction tr = db.TransactionManager.StartTransaction())
+            {
+                DBObject obj = tr.GetObject(res.ObjectId, OpenMode.ForRead);
+                bool isTable = obj is Table;
+                if (!isTable)
+                {
+                    string cls = obj == null ? "<null>" : obj.GetRXClass().Name;
+                    editor.WriteMessage(string.Format(
+                        "\nSelected object is a '{0}', not an AutoCAD table. " +
+                        "Pick the symbols table created by SincpacC3D.", cls));
+                }
+                tr.Commit();
+                return isTable ? res.ObjectId : ObjectId.Null;
+            }
+        }
+
+        /// <summary>
+        /// Reports how many AcDbTable objects exist and in which space (Model / each Layout). A pick
+        /// returns "Nothing selected" when the table lives in a different space than the one the
+        /// command is run from, so this tells the user where the table actually is.
+        /// </summary>
+        private static void ReportTablesInDrawing(Editor editor, Database db)
+        {
+            using (Transaction tr = db.TransactionManager.StartTransaction())
+            {
+                BlockTable bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                int total = 0;
+                List<string> lines = new List<string>();
+
+                foreach (ObjectId btrId in bt)
+                {
+                    BlockTableRecord btr = (BlockTableRecord)tr.GetObject(btrId, OpenMode.ForRead);
+                    if (!btr.IsLayout) continue;
+
+                    int count = 0;
+                    foreach (ObjectId id in btr)
+                    {
+                        if (id.ObjectClass.Name == "AcDbTable") count++;
+                    }
+                    if (count > 0)
+                    {
+                        total += count;
+                        Layout lay = (Layout)tr.GetObject(btr.LayoutId, OpenMode.ForRead);
+                        lines.Add(string.Format("    {0}: {1} table(s)", lay.LayoutName, count));
+                    }
+                }
+                tr.Commit();
+
+                editor.WriteMessage(string.Format("\nAcDbTable objects in this drawing: {0}", total));
+                foreach (string l in lines) editor.WriteMessage("\n" + l);
+                if (total == 0)
+                {
+                    editor.WriteMessage(
+                        "\n  (none found — run SincpacC3D's LegendBuilder first to create the symbols table)");
+                }
+                else
+                {
+                    editor.WriteMessage(
+                        "\n  Tip: run the command from the SAME space (Model or that Layout) as the table, " +
+                        "and click directly on a gridline or on a symbol/text inside a cell.");
+                }
+            }
         }
 
         /// <summary>
@@ -126,25 +197,39 @@ namespace LegendBuilderWW.Commands
                 ObjectId templateBtrId = resolver.Resolve(db);
 
                 RowParser parser = new RowParser(settings);
-                List<LegendRow> rows = parser.Parse(db, templateBtrId);
+                TemplateParse parse = parser.Parse(db, templateBtrId);
+                List<LegendRow> rows = parse.Rows;
 
-                ObjectId tableId = PromptForSincpacTable(editor);
+                ObjectId tableId = PromptForSincpacTable(editor, db);
                 if (tableId.IsNull)
                 {
+                    ReportTablesInDrawing(editor, db);
                     ErrorHandler.ShowMessage(editor, "Dump cancelled — no table selected.");
                     return;
                 }
 
                 DrawingUsage usage = new SincpacTableReader().Read(db, tableId);
+                new LinetypeHatchScanner().ScanInto(db, usage);
 
-                editor.WriteMessage("\nBlock tally read from SincpacC3D table:");
-                editor.WriteMessage(string.Format("\n  Blocks: {0} distinct", usage.BlockCounts.Count));
+                editor.WriteMessage("\nUsage tally (blocks from table, linetypes/hatches from scan):");
+                editor.WriteMessage(string.Format("\n  Blocks:    {0} distinct", usage.BlockCounts.Count));
                 foreach (KeyValuePair<string, int> kv in usage.BlockCounts)
                 {
                     editor.WriteMessage(string.Format("\n    block: {0,-35} count={1}", kv.Key, kv.Value));
                 }
+                editor.WriteMessage(string.Format("\n  Linetypes: {0} distinct", usage.LinetypeCounts.Count));
+                foreach (KeyValuePair<string, int> kv in usage.LinetypeCounts)
+                {
+                    editor.WriteMessage(string.Format("\n    ltype: {0,-35} count={1}", kv.Key, kv.Value));
+                }
+                editor.WriteMessage(string.Format("\n  Hatches:   {0} distinct", usage.HatchPatternCounts.Count));
+                foreach (KeyValuePair<string, int> kv in usage.HatchPatternCounts)
+                {
+                    editor.WriteMessage(string.Format("\n    hatch: {0,-35} count={1}", kv.Key, kv.Value));
+                }
 
-                editor.WriteMessage(string.Format("\n\nParsed {0} legend row(s):", rows.Count));
+                editor.WriteMessage(string.Format("\n\nParsed {0} legend row(s), {1} title entity(ies):",
+                    rows.Count, parse.TitleEntityIds.Count));
                 for (int i = 0; i < rows.Count; i++)
                 {
                     LegendRow r = rows[i];

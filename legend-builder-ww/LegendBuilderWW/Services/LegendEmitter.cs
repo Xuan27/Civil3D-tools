@@ -23,9 +23,9 @@ namespace LegendBuilderWW.Services
             _settings = settings;
         }
 
-        public void Emit(Document doc, List<MatchedRow> selected)
+        public void Emit(Document doc, List<MatchedRow> allRows, List<ObjectId> titleEntityIds, double templateTopRowY)
         {
-            List<MatchedRow> rows = selected
+            List<MatchedRow> rows = allRows
                 .Where(r => r.IncludeInOutput && r.Source != null)
                 .ToList();
 
@@ -38,10 +38,16 @@ namespace LegendBuilderWW.Services
             Database db = doc.Database;
             Editor editor = doc.Editor;
 
-            RowLayout layout = ComputeLayout(rows);
+            // Pitch and column positions come from the FULL template, not just the kept rows —
+            // otherwise the gaps left by dropped rows inflate the computed row pitch.
+            List<LegendRow> allTemplateRows = allRows
+                .Where(r => r.Source != null)
+                .Select(r => r.Source)
+                .ToList();
+            RowLayout layout = ComputeLayout(allTemplateRows);
 
             string newBlockName = BuildOutputBlockName();
-            ObjectId newBtrId = CreateOutputBlock(db, newBlockName, rows, layout);
+            ObjectId newBtrId = CreateOutputBlock(db, newBlockName, rows, layout, titleEntityIds, templateTopRowY);
 
             ObjectId paperSpaceId = GetActivePaperSpaceId(db);
             if (paperSpaceId.IsNull)
@@ -82,11 +88,10 @@ namespace LegendBuilderWW.Services
             return prefix + DateTime.Now.ToString("yyyyMMdd_HHmmss");
         }
 
-        private RowLayout ComputeLayout(List<MatchedRow> rows)
+        private RowLayout ComputeLayout(List<LegendRow> allTemplateRows)
         {
             // Pull row pitch and column X positions from the template originals — keeps the new
             // legend looking identical to the source, just shorter.
-            var allTemplateRows = rows.Select(r => r.Source).ToList();
             double rowPitch = ComputeRowPitch(allTemplateRows);
             double leftColumnX = allTemplateRows
                 .Where(r => r.ColumnIndex == 0)
@@ -109,8 +114,19 @@ namespace LegendBuilderWW.Services
 
         private static double ComputeRowPitch(List<LegendRow> rows)
         {
-            List<double> ys = rows.Select(r => r.RowOrigin.Y).Distinct().OrderByDescending(y => y).ToList();
+            // Use a single column so the two columns' interleaved Y origins don't pollute the
+            // spacing, and fall back to all rows if one column is too sparse.
+            List<double> ys = rows
+                .Where(r => r.ColumnIndex == 0)
+                .Select(r => r.RowOrigin.Y)
+                .OrderByDescending(y => y)
+                .ToList();
+            if (ys.Count < 2)
+            {
+                ys = rows.Select(r => r.RowOrigin.Y).Distinct().OrderByDescending(y => y).ToList();
+            }
             if (ys.Count < 2) return 0;
+
             List<double> deltas = new List<double>();
             for (int i = 1; i < ys.Count; i++)
             {
@@ -120,7 +136,13 @@ namespace LegendBuilderWW.Services
             return deltas[deltas.Count / 2];
         }
 
-        private ObjectId CreateOutputBlock(Database db, string blockName, List<MatchedRow> rows, RowLayout layout)
+        private ObjectId CreateOutputBlock(
+            Database db,
+            string blockName,
+            List<MatchedRow> rows,
+            RowLayout layout,
+            List<ObjectId> titleEntityIds,
+            double templateTopRowY)
         {
             ObjectId newBtrId;
 
@@ -153,10 +175,29 @@ namespace LegendBuilderWW.Services
                 CloneColumn(tr, leftCol, layout.LeftColumnX, layout, newBtr);
                 CloneColumn(tr, rightCol, layout.RightColumnX, layout, newBtr);
 
+                CloneTitle(tr, titleEntityIds, templateTopRowY, newBtr);
+
                 tr.Commit();
             }
 
             return newBtrId;
+        }
+
+        /// <summary>
+        /// Re-stamps the template title (LEGEND text + bar) above the re-stacked rows. The rows map
+        /// the template's top-row origin to Y=0, so shifting the title by -templateTopRowY preserves
+        /// the template's title-to-first-row gap no matter which rows were dropped.
+        /// </summary>
+        private static void CloneTitle(
+            Transaction tr,
+            List<ObjectId> titleEntityIds,
+            double templateTopRowY,
+            BlockTableRecord target)
+        {
+            if (titleEntityIds == null || titleEntityIds.Count == 0) return;
+
+            Vector3d offset = new Vector3d(0, -templateTopRowY, 0);
+            CloneEntitiesInto(tr, titleEntityIds, target, offset);
         }
 
         private static void CloneColumn(

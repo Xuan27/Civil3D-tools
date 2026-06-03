@@ -28,9 +28,9 @@ namespace LegendBuilderWW.Services
             _settings = settings;
         }
 
-        public List<LegendRow> Parse(Database db, ObjectId templateBtrId)
+        public TemplateParse Parse(Database db, ObjectId templateBtrId)
         {
-            List<LegendRow> rows = new List<LegendRow>();
+            TemplateParse result = new TemplateParse();
 
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
@@ -40,10 +40,18 @@ namespace LegendBuilderWW.Services
                 if (entities.Count == 0)
                 {
                     tr.Commit();
-                    return rows;
+                    return result;
                 }
 
                 double titleCutoffY = ResolveTitleCutoff(entities);
+
+                // Everything above the cutoff is the legend title (LEGEND text + underline bar);
+                // keep its ObjectIds so the emitter can re-stamp it atop the output legend.
+                foreach (EntityInfo e in entities.Where(e => e.CentroidY >= titleCutoffY))
+                {
+                    result.TitleEntityIds.Add(e.Id);
+                }
+
                 List<EntityInfo> body = entities.Where(e => e.CentroidY < titleCutoffY).ToList();
 
                 List<List<EntityInfo>> rowBuckets = ClusterIntoRows(body, _settings.RowGroupingTolerance);
@@ -56,16 +64,21 @@ namespace LegendBuilderWW.Services
                     List<EntityInfo> rightCol = rowEntities.Where(e => e.CentroidX >= medianX).ToList();
 
                     LegendRow leftRow = BuildRow(tr, leftCol, columnIndex: 0);
-                    if (leftRow != null) rows.Add(leftRow);
+                    if (leftRow != null) result.Rows.Add(leftRow);
 
                     LegendRow rightRow = BuildRow(tr, rightCol, columnIndex: 1);
-                    if (rightRow != null) rows.Add(rightRow);
+                    if (rightRow != null) result.Rows.Add(rightRow);
                 }
 
                 tr.Commit();
             }
 
-            return rows;
+            if (result.Rows.Count > 0)
+            {
+                result.TopRowOriginY = result.Rows.Max(r => r.RowOrigin.Y);
+            }
+
+            return result;
         }
 
         private List<EntityInfo> CollectEntities(Transaction tr, BlockTableRecord btr)

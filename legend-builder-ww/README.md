@@ -62,13 +62,14 @@ LegendBuilderWW/
 ├── Config/
 │   ├── Settings.cs                         JSON load/save in %APPDATA%
 │   └── settings.default.json               Embedded first-run seed
-├── Models/                                 LegendRow, MatchedRow, RowType, DrawingUsage
+├── Models/                                 LegendRow, MatchedRow, RowType, DrawingUsage, TemplateParse
 ├── Services/
 │   ├── TemplateResolver.cs                 Current-DB lookup, else side-load source DWG
 │   ├── TemplateReader.cs                   Side-load + WblockClone the block
-│   ├── RowParser.cs                        Y-cluster entities → typed rows
+│   ├── RowParser.cs                        Y-cluster entities → typed rows + title
 │   ├── SincpacTableReader.cs               Read block names from a SincpacC3D symbols table
-│   ├── LegendMatcher.cs                    Join template rows ↔ table block tally
+│   ├── LinetypeHatchScanner.cs             Tally model-space linetypes/hatches into usage
+│   ├── LegendMatcher.cs                    Join template rows ↔ usage tally
 │   └── LegendEmitter.cs                    Build new BTR, insert in paper space
 ├── UI/
 │   ├── LegendBuilderForm.{cs,Designer.cs,resx}
@@ -79,5 +80,6 @@ LegendBuilderWW/
 ## Known limitations
 
 - Template parsing assumes two columns laid out left-to-right with consistent row pitch. If the source block's layout drifts, increase `RowGroupingTolerance` or hand-set `TitleEntityYThreshold` in `settings.json`.
-- Symbol detection depends on SincpacC3D. The plugin reads an existing SincpacC3D symbols table rather than scanning the drawing itself, so you must run SincpacC3D's `LegendBuilder` first.
-- Matching is by **block name**: a template row matches only if the block name in the table cell equals the row's block name. Use `LEGENDBUILDERWW_DUMP` to spot naming mismatches. Anonymous blocks (names starting with `*`) are skipped.
+- **Block** detection depends on SincpacC3D: the plugin reads block names from an existing SincpacC3D symbols table rather than scanning the drawing for blocks, so you must run SincpacC3D's `LegendBuilder` first. Matching is by **block name** — a template row matches only if the block name in the table cell equals the row's block name (use `LEGENDBUILDERWW_DUMP` to spot mismatches; anonymous `*` blocks are skipped).
+- **Linetypes and hatches** are detected separately, by a plain **model-space scan** (SincpacC3D's table does not carry them). Linetypes/hatches that live only in xrefs or paper space are not counted.
+- The output block includes the template's title (the "LEGEND" text + underline bar), placed above the rows at the template's spacing.
