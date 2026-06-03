@@ -75,6 +75,15 @@ namespace LegendBuilderWW.Commands
                 LegendMatcher matcher = new LegendMatcher();
                 List<MatchedRow> matched = matcher.Match(parse.Rows, usage);
 
+                List<string> orphans = FindOrphanBlocks(usage, parse.Rows);
+                if (orphans.Count > 0)
+                {
+                    ErrorHandler.ShowWarning(editor, string.Format(
+                        "{0} block(s) are used in the drawing but are NOT in the Vertical Legend template:\n  {1}\n\n" +
+                        "Add them to the template to include them in the legend.",
+                        orphans.Count, string.Join("\n  ", orphans.ToArray())));
+                }
+
                 using (LegendBuilderForm form = new LegendBuilderForm(matched, settings))
                 {
                     DialogResult result = Application.ShowModalDialog(form);
@@ -238,10 +247,96 @@ namespace LegendBuilderWW.Commands
                         "\n  [{0,3}] col={1} type={2,-8} key={3,-30} count={4,-4} desc=\"{5}\"",
                         i + 1, r.ColumnIndex, r.RowType, r.Key, count, r.Description));
                 }
+
+                List<string> orphans = FindOrphanBlocks(usage, parse.Rows);
+                editor.WriteMessage(string.Format(
+                    "\n\nDetected blocks NOT in template ({0}):", orphans.Count));
+                foreach (string o in orphans)
+                {
+                    editor.WriteMessage("\n    " + o);
+                }
+
+                ProbeTemplateHatches(editor, db, templateBtrId);
             }
             catch (Exception ex)
             {
                 ErrorHandler.HandleException(editor, ex, "LEGENDBUILDERWW_DUMP");
+            }
+        }
+
+        /// <summary>
+        /// Blocks used in the drawing (per the SincpacC3D table) that have no matching block row in
+        /// the template — i.e. symbols that should appear in the legend but the template can't supply.
+        /// </summary>
+        private static List<string> FindOrphanBlocks(DrawingUsage usage, List<LegendRow> templateRows)
+        {
+            System.Collections.Generic.HashSet<string> templateBlocks =
+                new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            foreach (LegendRow r in templateRows)
+            {
+                if (r.RowType == LegendBuilderWW.Models.RowType.Block && !string.IsNullOrEmpty(r.Key))
+                {
+                    templateBlocks.Add(r.Key);
+                }
+            }
+
+            List<string> orphans = new List<string>();
+            foreach (string key in usage.BlockCounts.Keys)
+            {
+                if (!templateBlocks.Contains(key)) orphans.Add(key);
+            }
+            orphans.Sort();
+            return orphans;
+        }
+
+        /// <summary>
+        /// Diagnostic for the "surface hatch shows as Linetype" bug: for every Hatch in the template,
+        /// reports its pattern, whether GeometricExtents throws, and whether the loop-based fallback
+        /// (RowParser.TryGetHatchExtents) recovers bounds. Tells us why a hatch swatch is or isn't
+        /// surviving the parser.
+        /// </summary>
+        private static void ProbeTemplateHatches(Editor editor, Database db, ObjectId templateBtrId)
+        {
+            using (Transaction tr = db.TransactionManager.StartTransaction())
+            {
+                BlockTableRecord btr = (BlockTableRecord)tr.GetObject(templateBtrId, OpenMode.ForRead);
+                int n = 0;
+
+                editor.WriteMessage("\n\nTemplate hatches (raw probe):");
+                foreach (ObjectId id in btr)
+                {
+                    Autodesk.AutoCAD.DatabaseServices.Hatch h =
+                        tr.GetObject(id, OpenMode.ForRead) as Autodesk.AutoCAD.DatabaseServices.Hatch;
+                    if (h == null) continue;
+                    n++;
+
+                    string pat;
+                    try { pat = h.PatternName; } catch { pat = "<pattern threw>"; }
+
+                    string geo;
+                    try
+                    {
+                        Extents3d e = h.GeometricExtents;
+                        geo = string.Format("GeomExt OK y[{0:0.##}..{1:0.##}]", e.MinPoint.Y, e.MaxPoint.Y);
+                    }
+                    catch (Exception ex) { geo = "GeomExt THREW " + ex.GetType().Name; }
+
+                    string loop;
+                    try
+                    {
+                        Extents3d? le = RowParser.TryGetHatchExtents(h);
+                        loop = le.HasValue
+                            ? string.Format("loops OK y[{0:0.##}..{1:0.##}]", le.Value.MinPoint.Y, le.Value.MaxPoint.Y)
+                            : "loops <null>";
+                    }
+                    catch (Exception ex) { loop = "loops THREW " + ex.GetType().Name; }
+
+                    editor.WriteMessage(string.Format(
+                        "\n  hatch[{0}] pattern={1,-12} {2}  {3}", n, pat, geo, loop));
+                }
+                if (n == 0) editor.WriteMessage("\n  (no Hatch entities in template)");
+
+                tr.Commit();
             }
         }
     }

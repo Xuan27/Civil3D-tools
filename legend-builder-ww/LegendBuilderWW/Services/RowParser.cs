@@ -123,7 +123,7 @@ namespace LegendBuilderWW.Services
             }
         }
 
-        private static Extents3d? TryGetHatchExtents(Hatch hatch)
+        public static Extents3d? TryGetHatchExtents(Hatch hatch)
         {
             try
             {
