@@ -111,7 +111,57 @@ namespace LegendBuilderWW.Services
         private static Extents3d? TryGetBounds(Entity ent)
         {
             try { return ent.GeometricExtents; }
-            catch { return null; }
+            catch
+            {
+                // Hatch.GeometricExtents throws for some patterns (e.g. AR-CONC, GRAVEL). If we just
+                // dropped the hatch, the swatch's boundary rectangle would be the only thing left in
+                // the cell and the row would be mis-typed as a Continuous linetype. Recover the
+                // hatch's bounds from its boundary loops so it survives and classifies as a Hatch.
+                Hatch hatch = ent as Hatch;
+                if (hatch != null) return TryGetHatchExtents(hatch);
+                return null;
+            }
+        }
+
+        private static Extents3d? TryGetHatchExtents(Hatch hatch)
+        {
+            try
+            {
+                Extents3d ext = new Extents3d();
+                bool any = false;
+
+                for (int i = 0; i < hatch.NumberOfLoops; i++)
+                {
+                    HatchLoop loop = hatch.GetLoopAt(i);
+
+                    if (loop.IsPolyline && loop.Polyline != null)
+                    {
+                        foreach (BulgeVertex bv in loop.Polyline)
+                        {
+                            ext.AddPoint(new Point3d(bv.Vertex.X, bv.Vertex.Y, 0));
+                            any = true;
+                        }
+                    }
+                    else if (loop.Curves != null)
+                    {
+                        foreach (Curve2d cv in loop.Curves)
+                        {
+                            Interval iv = cv.GetInterval();
+                            Point2d a = cv.EvaluatePoint(iv.LowerBound);
+                            Point2d b = cv.EvaluatePoint(iv.UpperBound);
+                            ext.AddPoint(new Point3d(a.X, a.Y, 0));
+                            ext.AddPoint(new Point3d(b.X, b.Y, 0));
+                            any = true;
+                        }
+                    }
+                }
+
+                return any ? ext : (Extents3d?)null;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private double ResolveTitleCutoff(List<EntityInfo> entities)
