@@ -72,19 +72,24 @@ namespace LegendBuilderWW.Commands
 
                 // Blocks (incl. point markers / pipe structures) come from the SincpacC3D table;
                 // linetypes and hatches come from a plain model-space scan and merge into the tally.
-                DrawingUsage usage = new SincpacTableReader().Read(db, tableId);
+                SincpacTableReader reader = new SincpacTableReader();
+                DrawingUsage usage = reader.Read(db, tableId);
                 new LinetypeHatchScanner().ScanInto(db, usage);
 
                 LegendMatcher matcher = new LegendMatcher();
                 List<MatchedRow> matched = matcher.Match(parse.Rows, usage);
 
-                List<string> orphans = FindOrphanBlocks(usage, parse.Rows);
-                if (orphans.Count > 0)
+                // Symbols used in the drawing but absent from the template are synthesized as orphan
+                // rows and offered (unchecked) in the dialog so the user can opt them in.
+                List<MatchedRow> orphanRows = BuildOrphanRows(db, usage, parse.Rows, reader.BlockDescriptions);
+                if (orphanRows.Count > 0)
                 {
+                    matched.AddRange(orphanRows);
                     ErrorHandler.ShowWarning(editor, string.Format(
-                        "{0} block(s) are used in the drawing but are NOT in the Vertical Legend template:\n  {1}\n\n" +
-                        "Add them to the template to include them in the legend.",
-                        orphans.Count, string.Join("\n  ", orphans.ToArray())));
+                        "{0} symbol(s) are used in the drawing but are NOT in the Vertical Legend template:\n  {1}\n\n" +
+                        "They are added to the list (unchecked) — tick the ones you want and they will be " +
+                        "appended to the legend.",
+                        orphanRows.Count, string.Join("\n  ", DescribeOrphans(orphanRows))));
                 }
 
                 using (LegendBuilderForm form = new LegendBuilderForm(matched, settings))
@@ -220,7 +225,8 @@ namespace LegendBuilderWW.Commands
                     return;
                 }
 
-                DrawingUsage usage = new SincpacTableReader().Read(db, tableId);
+                SincpacTableReader reader = new SincpacTableReader();
+                DrawingUsage usage = reader.Read(db, tableId);
                 new LinetypeHatchScanner().ScanInto(db, usage);
 
                 editor.WriteMessage("\nUsage tally (blocks from table, linetypes/hatches from scan):");
@@ -251,10 +257,10 @@ namespace LegendBuilderWW.Commands
                         i + 1, r.ColumnIndex, r.RowType, r.Key, count, r.Description));
                 }
 
-                List<string> orphans = FindOrphanBlocks(usage, parse.Rows);
+                List<MatchedRow> orphanRows = BuildOrphanRows(db, usage, parse.Rows, reader.BlockDescriptions);
                 editor.WriteMessage(string.Format(
-                    "\n\nDetected blocks NOT in template ({0}):", orphans.Count));
-                foreach (string o in orphans)
+                    "\n\nSymbols used but NOT in template ({0}):", orphanRows.Count));
+                foreach (string o in DescribeOrphans(orphanRows))
                 {
                     editor.WriteMessage("\n    " + o);
                 }
@@ -268,28 +274,96 @@ namespace LegendBuilderWW.Commands
         }
 
         /// <summary>
-        /// Blocks used in the drawing (per the SincpacC3D table) that have no matching block row in
-        /// the template — i.e. symbols that should appear in the legend but the template can't supply.
+        /// Synthesizes "orphan" rows: symbols used in the drawing (blocks from the SincpacC3D table,
+        /// linetypes/hatches from the scan) that have no matching template row of the same type. Each
+        /// is returned as a synthetic, unchecked MatchedRow so the dialog can offer it. Block orphans
+        /// must exist as a block definition in the drawing (so the emitter can insert one) and carry
+        /// the SincpacC3D table description when available.
         /// </summary>
-        private static List<string> FindOrphanBlocks(DrawingUsage usage, List<LegendRow> templateRows)
+        private static List<MatchedRow> BuildOrphanRows(
+            Database db,
+            DrawingUsage usage,
+            List<LegendRow> templateRows,
+            System.Collections.Generic.Dictionary<string, string> blockDescriptions)
         {
-            System.Collections.Generic.HashSet<string> templateBlocks =
+            System.Collections.Generic.HashSet<string> tBlocks = TemplateKeys(templateRows, RowType.Block);
+            System.Collections.Generic.HashSet<string> tHatch = TemplateKeys(templateRows, RowType.Hatch);
+            System.Collections.Generic.HashSet<string> tLine = TemplateKeys(templateRows, RowType.Linetype);
+
+            List<MatchedRow> result = new List<MatchedRow>();
+
+            using (Transaction tr = db.TransactionManager.StartTransaction())
+            {
+                BlockTable bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                foreach (KeyValuePair<string, int> kv in usage.BlockCounts)
+                {
+                    if (tBlocks.Contains(kv.Key) || !bt.Has(kv.Key)) continue;
+                    string desc;
+                    if (blockDescriptions == null || !blockDescriptions.TryGetValue(kv.Key, out desc) ||
+                        string.IsNullOrEmpty(desc))
+                    {
+                        desc = kv.Key;
+                    }
+                    result.Add(MakeSyntheticRow(RowType.Block, kv.Key, desc, kv.Value, bt[kv.Key]));
+                }
+                tr.Commit();
+            }
+
+            foreach (KeyValuePair<string, int> kv in usage.HatchPatternCounts)
+            {
+                if (tHatch.Contains(kv.Key)) continue;
+                result.Add(MakeSyntheticRow(RowType.Hatch, kv.Key, kv.Key, kv.Value, ObjectId.Null));
+            }
+            foreach (KeyValuePair<string, int> kv in usage.LinetypeCounts)
+            {
+                if (tLine.Contains(kv.Key)) continue;
+                result.Add(MakeSyntheticRow(RowType.Linetype, kv.Key, kv.Key, kv.Value, ObjectId.Null));
+            }
+
+            return result;
+        }
+
+        private static System.Collections.Generic.HashSet<string> TemplateKeys(
+            List<LegendRow> templateRows, RowType type)
+        {
+            System.Collections.Generic.HashSet<string> set =
                 new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
             foreach (LegendRow r in templateRows)
             {
-                if (r.RowType == RowType.Block && !string.IsNullOrEmpty(r.Key))
-                {
-                    templateBlocks.Add(r.Key);
-                }
+                if (r.RowType == type && !string.IsNullOrEmpty(r.Key)) set.Add(r.Key);
             }
+            return set;
+        }
 
-            List<string> orphans = new List<string>();
-            foreach (string key in usage.BlockCounts.Keys)
+        private static MatchedRow MakeSyntheticRow(
+            RowType type, string key, string description, int count, ObjectId targetBlockId)
+        {
+            LegendRow row = new LegendRow
             {
-                if (!templateBlocks.Contains(key)) orphans.Add(key);
+                RowType = type,
+                Key = key,
+                Description = description,
+                IsSynthetic = true,
+                TargetBlockId = targetBlockId,
+                ColumnIndex = 0
+            };
+            return new MatchedRow
+            {
+                Source = row,
+                IsUsedInDrawing = true,
+                CountInDrawing = count,
+                IncludeInOutput = false
+            };
+        }
+
+        private static List<string> DescribeOrphans(List<MatchedRow> orphanRows)
+        {
+            List<string> lines = new List<string>();
+            foreach (MatchedRow m in orphanRows)
+            {
+                lines.Add(string.Format("{0,-8} {1,-28} \"{2}\"", m.Source.RowType, m.Source.Key, m.Source.Description));
             }
-            orphans.Sort();
-            return orphans;
+            return lines;
         }
 
         /// <summary>

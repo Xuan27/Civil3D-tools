@@ -42,5 +42,19 @@ namespace LegendBuilderWW.Models
         /// Which column (0-based) the row was in within the template (the template has two columns).
         /// </summary>
         public int ColumnIndex { get; set; }
+
+        /// <summary>
+        /// True for rows that are NOT from the template — synthesized for symbols used in the drawing
+        /// but missing from the Vertical Legend ("orphans"). Synthetic rows carry no template entity
+        /// ids; the emitter clones a same-type template row as a prototype and retargets it (block,
+        /// hatch pattern, or linetype) to this row's Key, using Description as the label.
+        /// </summary>
+        public bool IsSynthetic { get; set; }
+
+        /// <summary>
+        /// For a synthetic Block orphan, the BlockTableRecord ObjectId (in the current drawing) to
+        /// point the cloned block reference at. Unused for Hatch/Linetype orphans.
+        /// </summary>
+        public ObjectId TargetBlockId { get; set; }
     }
 }

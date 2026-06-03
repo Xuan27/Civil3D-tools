@@ -7,6 +7,8 @@ using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
 using LegendBuilderWW.Config;
 using LegendBuilderWW.Models;
+// Disambiguate from Autodesk.AutoCAD.DatabaseServices.RowType (table row kinds).
+using RowType = LegendBuilderWW.Models.RowType;
 
 namespace LegendBuilderWW.Services
 {
@@ -39,15 +41,17 @@ namespace LegendBuilderWW.Services
             Editor editor = doc.Editor;
 
             // Pitch and column positions come from the FULL template, not just the kept rows —
-            // otherwise the gaps left by dropped rows inflate the computed row pitch.
+            // otherwise the gaps left by dropped rows inflate the computed row pitch. Synthetic
+            // orphan rows have no template geometry, so they're excluded from the layout math.
             List<LegendRow> allTemplateRows = allRows
-                .Where(r => r.Source != null)
+                .Where(r => r.Source != null && !r.Source.IsSynthetic)
                 .Select(r => r.Source)
                 .ToList();
             RowLayout layout = ComputeLayout(allTemplateRows);
 
             string newBlockName = BuildOutputBlockName();
-            ObjectId newBtrId = CreateOutputBlock(db, newBlockName, rows, layout, titleEntityIds, templateTopRowY);
+            ObjectId newBtrId = CreateOutputBlock(
+                db, newBlockName, rows, allTemplateRows, layout, titleEntityIds, templateTopRowY);
 
             ObjectId paperSpaceId = GetActivePaperSpaceId(db);
             if (paperSpaceId.IsNull)
@@ -140,6 +144,7 @@ namespace LegendBuilderWW.Services
             Database db,
             string blockName,
             List<MatchedRow> rows,
+            List<LegendRow> allTemplateRows,
             RowLayout layout,
             List<ObjectId> titleEntityIds,
             double templateTopRowY)
@@ -167,13 +172,32 @@ namespace LegendBuilderWW.Services
                 newBtrId = bt.Add(newBtr);
                 tr.AddNewlyCreatedDBObject(newBtr, true);
 
-                // Split rows back into left/right columns, then stack them top-down so the output
+                // Template rows: split back into left/right columns and stack top-down so the output
                 // mirrors the template's column flow even if the user excluded some rows.
-                List<MatchedRow> leftCol = rows.Where(r => r.Source.ColumnIndex == 0).ToList();
-                List<MatchedRow> rightCol = rows.Where(r => r.Source.ColumnIndex == 1).ToList();
+                List<MatchedRow> templateRows = rows.Where(r => !r.Source.IsSynthetic).ToList();
+                List<MatchedRow> syntheticRows = rows.Where(r => r.Source.IsSynthetic).ToList();
 
-                CloneColumn(tr, leftCol, layout.LeftColumnX, layout, newBtr);
-                CloneColumn(tr, rightCol, layout.RightColumnX, layout, newBtr);
+                List<MatchedRow> leftCol = templateRows.Where(r => r.Source.ColumnIndex == 0).ToList();
+                List<MatchedRow> rightCol = templateRows.Where(r => r.Source.ColumnIndex == 1).ToList();
+
+                double leftNextY = CloneColumn(tr, leftCol, layout.LeftColumnX, layout, newBtr);
+                double rightNextY = CloneColumn(tr, rightCol, layout.RightColumnX, layout, newBtr);
+
+                // Orphan rows have no template geometry — clone a same-type template row as a
+                // prototype, retarget it, and append it to whichever column is currently shorter.
+                int leftCount = leftCol.Count;
+                int rightCount = rightCol.Count;
+                foreach (MatchedRow synth in syntheticRows)
+                {
+                    bool toLeft = leftCount <= rightCount;
+                    double colX = toLeft ? layout.LeftColumnX : layout.RightColumnX;
+                    double y = toLeft ? leftNextY : rightNextY;
+
+                    EmitSyntheticRow(tr, synth.Source, allTemplateRows, colX, y, newBtr);
+
+                    if (toLeft) { leftNextY -= layout.RowPitch; leftCount++; }
+                    else { rightNextY -= layout.RowPitch; rightCount++; }
+                }
 
                 CloneTitle(tr, titleEntityIds, templateTopRowY, newBtr);
 
@@ -181,6 +205,100 @@ namespace LegendBuilderWW.Services
             }
 
             return newBtrId;
+        }
+
+        /// <summary>
+        /// Emits one orphan row by cloning a same-type template row (prototype) and retargeting it:
+        /// a Block clone is pointed at the orphan's block, a Hatch clone's pattern is swapped, a
+        /// Linetype clone's curve gets the orphan linetype; the cloned description text is replaced.
+        /// Reusing a prototype keeps the orphan visually consistent with the rest of the legend.
+        /// </summary>
+        private static void EmitSyntheticRow(
+            Transaction tr,
+            LegendRow synth,
+            List<LegendRow> allTemplateRows,
+            double columnX,
+            double y,
+            BlockTableRecord target)
+        {
+            LegendRow proto = FindPrototype(allTemplateRows, synth.RowType);
+            if (proto == null) return; // no same-type template row to model the orphan on
+
+            Vector3d offset = new Vector3d(columnX - proto.RowOrigin.X, y - proto.RowOrigin.Y, 0);
+
+            List<Entity> symbolClones = CloneEntitiesInto(tr, proto.SymbolEntityIds, target, offset);
+            List<Entity> descClones = CloneEntitiesInto(
+                tr, new List<ObjectId> { proto.DescriptionEntityId }, target, offset);
+
+            RetargetSymbol(symbolClones, synth);
+            SetDescriptionText(descClones, synth.Description);
+        }
+
+        private static LegendRow FindPrototype(List<LegendRow> templateRows, RowType type)
+        {
+            foreach (LegendRow r in templateRows)
+            {
+                if (r.RowType == type &&
+                    r.SymbolEntityIds != null && r.SymbolEntityIds.Count > 0 &&
+                    !r.DescriptionEntityId.IsNull)
+                {
+                    return r;
+                }
+            }
+            return null;
+        }
+
+        private static void RetargetSymbol(List<Entity> symbolClones, LegendRow synth)
+        {
+            if (synth.RowType == RowType.Block)
+            {
+                if (synth.TargetBlockId.IsNull) return;
+                foreach (Entity e in symbolClones)
+                {
+                    BlockReference br = e as BlockReference;
+                    if (br != null) { br.BlockTableRecord = synth.TargetBlockId; return; }
+                }
+            }
+            else if (synth.RowType == RowType.Hatch)
+            {
+                foreach (Entity e in symbolClones)
+                {
+                    Hatch h = e as Hatch;
+                    if (h != null)
+                    {
+                        try
+                        {
+                            h.SetHatchPattern(HatchPatternType.PreDefined, synth.Key);
+                            h.EvaluateHatch(true);
+                        }
+                        catch { /* pattern not resolvable — leave prototype's fill */ }
+                        return;
+                    }
+                }
+            }
+            else if (synth.RowType == RowType.Linetype)
+            {
+                foreach (Entity e in symbolClones)
+                {
+                    Curve c = e as Curve;
+                    if (c != null)
+                    {
+                        try { c.Linetype = synth.Key; } catch { /* linetype not loaded */ }
+                    }
+                }
+            }
+        }
+
+        private static void SetDescriptionText(List<Entity> descClones, string text)
+        {
+            foreach (Entity e in descClones)
+            {
+                DBText dbt = e as DBText;
+                if (dbt != null) { dbt.TextString = text ?? string.Empty; continue; }
+
+                MText mt = e as MText;
+                if (mt != null) { mt.Contents = text ?? string.Empty; }
+            }
         }
 
         /// <summary>
@@ -200,7 +318,11 @@ namespace LegendBuilderWW.Services
             CloneEntitiesInto(tr, titleEntityIds, target, offset);
         }
 
-        private static void CloneColumn(
+        /// <summary>
+        /// Clones a column of template rows top-down and returns the Y where the next row would go,
+        /// so orphan rows can be appended below.
+        /// </summary>
+        private static double CloneColumn(
             Transaction tr,
             List<MatchedRow> column,
             double newColumnX,
@@ -221,14 +343,16 @@ namespace LegendBuilderWW.Services
 
                 currentY -= layout.RowPitch;
             }
+            return currentY;
         }
 
-        private static void CloneEntitiesInto(
+        private static List<Entity> CloneEntitiesInto(
             Transaction tr,
             List<ObjectId> sourceIds,
             BlockTableRecord target,
             Vector3d offset)
         {
+            List<Entity> clones = new List<Entity>();
             foreach (ObjectId id in sourceIds)
             {
                 if (id.IsNull) continue;
@@ -240,7 +364,9 @@ namespace LegendBuilderWW.Services
 
                 target.AppendEntity(clone);
                 tr.AddNewlyCreatedDBObject(clone, true);
+                clones.Add(clone);
             }
+            return clones;
         }
 
         private static ObjectId GetActivePaperSpaceId(Database db)

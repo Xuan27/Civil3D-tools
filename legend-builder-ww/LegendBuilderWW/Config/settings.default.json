@@ -2,6 +2,6 @@
   "SourceDwgPath": "C:\\WPS-CAD-LAND\\2023-WPS\\Tool Palettes\\Land Survey\\Source\\Legends and Notes.dwg",
   "SourceBlockName": "Vertical Legend",
   "OutputBlockNamePrefix": "LEGEND_WW_",
-  "RowGroupingTolerance": 0.1,
+  "RowGroupingTolerance": 0.2,
   "TitleEntityYThreshold": null
 }
