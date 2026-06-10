@@ -25,6 +25,7 @@ namespace LegendBuilderWW.UI
         private System.Windows.Forms.Label labelSummary;
         private System.Windows.Forms.Button buttonSelectUsed;
         private System.Windows.Forms.Button buttonClear;
+        private System.Windows.Forms.Button buttonPreview;
         private System.Windows.Forms.Button buttonGenerate;
         private System.Windows.Forms.Button buttonCancel;
 
@@ -60,6 +61,7 @@ namespace LegendBuilderWW.UI
             this.labelSummary = new System.Windows.Forms.Label();
             this.buttonSelectUsed = new System.Windows.Forms.Button();
             this.buttonClear = new System.Windows.Forms.Button();
+            this.buttonPreview = new System.Windows.Forms.Button();
             this.buttonGenerate = new System.Windows.Forms.Button();
             this.buttonCancel = new System.Windows.Forms.Button();
 
@@ -210,6 +212,7 @@ namespace LegendBuilderWW.UI
             this.buttonFlow.Padding = new System.Windows.Forms.Padding(0, 12, 12, 12);
             this.buttonFlow.WrapContents = false;
             this.buttonFlow.Controls.Add(this.buttonGenerate);
+            this.buttonFlow.Controls.Add(this.buttonPreview);
             this.buttonFlow.Controls.Add(this.buttonCancel);
             this.buttonFlow.Controls.Add(this.buttonClear);
             this.buttonFlow.Controls.Add(this.buttonSelectUsed);
@@ -244,6 +247,15 @@ namespace LegendBuilderWW.UI
             this.buttonCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
 
             //
+            // buttonPreview
+            //
+            this.buttonPreview.Size = new System.Drawing.Size(130, 32);
+            this.buttonPreview.Margin = new System.Windows.Forms.Padding(6, 0, 0, 0);
+            this.buttonPreview.Text = "Preview Legend";
+            this.buttonPreview.UseVisualStyleBackColor = true;
+            this.buttonPreview.Click += new System.EventHandler(this.OnPreviewClicked);
+
+            //
             // buttonClear
             //
             this.buttonClear.Size = new System.Drawing.Size(80, 32);
@@ -268,7 +280,7 @@ namespace LegendBuilderWW.UI
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.AcceptButton = this.buttonGenerate;
             this.CancelButton = this.buttonCancel;
-            this.ClientSize = new System.Drawing.Size(820, 560);
+            this.ClientSize = new System.Drawing.Size(980, 560);
             this.Controls.Add(this.grid);
             this.Controls.Add(this.panelTop);
             this.Controls.Add(this.panelBottom);

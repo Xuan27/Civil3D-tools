@@ -82,6 +82,61 @@ namespace LegendBuilderWW.Services
                 newBlockName, rows.Count));
         }
 
+        /// <summary>
+        /// Builds the legend into a throwaway block, renders it to a bitmap, then erases the block —
+        /// for the dialog's "Preview Legend" button. Takes the full matched list (same as Emit) so
+        /// layout pitch is computed from the whole template; emits only the checked rows. Returns null
+        /// if nothing is checked or rendering fails.
+        /// </summary>
+        public System.Drawing.Bitmap RenderPreview(
+            Document doc,
+            List<MatchedRow> allRows,
+            List<ObjectId> titleEntityIds,
+            double templateTopRowY,
+            System.Drawing.Size size)
+        {
+            Database db = doc.Database;
+
+            List<MatchedRow> rows = allRows
+                .Where(r => r.IncludeInOutput && r.Source != null)
+                .ToList();
+            if (rows.Count == 0) return null;
+
+            List<LegendRow> allTemplateRows = allRows
+                .Where(r => r.Source != null && !r.Source.IsSynthetic)
+                .Select(r => r.Source)
+                .ToList();
+            RowLayout layout = ComputeLayout(allTemplateRows);
+
+            ObjectId btrId = CreateOutputBlock(
+                db, "LEGEND_WW_PREVIEW", rows, allTemplateRows, layout,
+                titleEntityIds, templateTopRowY, _settings.SingleColumn);
+
+            try
+            {
+                return SymbolRenderer.RenderBlock(doc, btrId, size, System.Drawing.Color.White);
+            }
+            finally
+            {
+                EraseBlock(db, btrId);
+            }
+        }
+
+        private static void EraseBlock(Database db, ObjectId btrId)
+        {
+            if (btrId.IsNull) return;
+            try
+            {
+                using (Transaction tr = db.TransactionManager.StartTransaction())
+                {
+                    BlockTableRecord btr = tr.GetObject(btrId, OpenMode.ForWrite, false, true) as BlockTableRecord;
+                    if (btr != null) btr.Erase();
+                    tr.Commit();
+                }
+            }
+            catch { /* best-effort cleanup of the throwaway preview block */ }
+        }
+
         private bool PromptedPointWasValid;
 
         private Point3d PromptInsertionPoint(Editor editor, ref bool singleColumn)

@@ -92,7 +92,13 @@ namespace LegendBuilderWW.Commands
                         orphanRows.Count, string.Join("\n  ", DescribeOrphans(orphanRows))));
                 }
 
-                using (LegendBuilderForm form = new LegendBuilderForm(matched, settings))
+                LegendEmitter emitter = new LegendEmitter(settings);
+                System.Drawing.Size previewSize = new System.Drawing.Size(800, 1000);
+                System.Func<List<MatchedRow>, System.Drawing.Image> previewProvider =
+                    previewRows => emitter.RenderPreview(
+                        doc, previewRows, parse.TitleEntityIds, parse.TopRowOriginY, previewSize);
+
+                using (LegendBuilderForm form = new LegendBuilderForm(matched, settings, previewProvider))
                 {
                     DialogResult result = Application.ShowModalDialog(form);
                     if (result != DialogResult.OK)
@@ -101,7 +107,6 @@ namespace LegendBuilderWW.Commands
                         return;
                     }
 
-                    LegendEmitter emitter = new LegendEmitter(settings);
                     emitter.Emit(doc, matched, parse.TitleEntityIds, parse.TopRowOriginY);
                 }
             }

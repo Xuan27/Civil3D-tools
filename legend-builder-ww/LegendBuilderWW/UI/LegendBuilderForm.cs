@@ -13,14 +13,19 @@ namespace LegendBuilderWW.UI
         private BindingList<MatchedRow> _allRows;
         private BindingList<MatchedRow> _visibleRows;
         private readonly Settings _settings;
+        private readonly System.Func<List<MatchedRow>, System.Drawing.Image> _previewProvider;
 
         public List<MatchedRow> SelectedRows { get; private set; }
         public bool SettingsChanged { get; private set; }
 
-        public LegendBuilderForm(List<MatchedRow> rows, Settings settings)
+        public LegendBuilderForm(
+            List<MatchedRow> rows,
+            Settings settings,
+            System.Func<List<MatchedRow>, System.Drawing.Image> previewProvider)
         {
             InitializeComponent();
             _settings = settings;
+            _previewProvider = previewProvider;
 
             _allRows = new BindingList<MatchedRow>(rows ?? new List<MatchedRow>());
             _visibleRows = new BindingList<MatchedRow>();
@@ -172,6 +177,66 @@ namespace LegendBuilderWW.UI
                     SettingsChanged = true;
                 }
             }
+        }
+
+        private void OnPreviewClicked(object sender, EventArgs e)
+        {
+            if (_previewProvider == null) return;
+
+            if (!_allRows.Any(r => r.IncludeInOutput))
+            {
+                MessageBox.Show(this, "Check at least one row to preview.", "Legend Builder",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            System.Drawing.Image image;
+            using (new WaitCursorScope())
+            {
+                try { image = _previewProvider(_allRows.ToList()); }
+                catch { image = null; }
+            }
+
+            if (image == null)
+            {
+                MessageBox.Show(this,
+                    "Preview is unavailable (the symbols could not be rendered).",
+                    "Legend Builder", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            using (Form window = BuildPreviewWindow(image))
+            {
+                window.ShowDialog(this);
+            }
+            image.Dispose();
+        }
+
+        private Form BuildPreviewWindow(System.Drawing.Image image)
+        {
+            Form window = new Form();
+            window.Text = "Legend Preview";
+            window.StartPosition = FormStartPosition.CenterParent;
+            window.ShowIcon = false;
+            window.MinimizeBox = false;
+            window.Width = System.Math.Min(1000, image.Width + 40);
+            window.Height = System.Math.Min(800, image.Height + 60);
+
+            PictureBox picture = new PictureBox();
+            picture.Dock = DockStyle.Fill;
+            picture.SizeMode = PictureBoxSizeMode.Zoom;
+            picture.BackColor = System.Drawing.Color.White;
+            picture.Image = image;
+
+            window.Controls.Add(picture);
+            return window;
+        }
+
+        private sealed class WaitCursorScope : IDisposable
+        {
+            private readonly Cursor _previous;
+            public WaitCursorScope() { _previous = Cursor.Current; Cursor.Current = Cursors.WaitCursor; }
+            public void Dispose() { Cursor.Current = _previous; }
         }
     }
 }
