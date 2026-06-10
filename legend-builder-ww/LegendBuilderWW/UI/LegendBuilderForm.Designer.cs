@@ -171,9 +171,9 @@ namespace LegendBuilderWW.UI
             //
             // colDescription
             //
-            this.colDescription.HeaderText = "Description";
+            this.colDescription.HeaderText = "Description (editable)";
             this.colDescription.DataPropertyName = "Description";
-            this.colDescription.ReadOnly = true;
+            this.colDescription.ReadOnly = false;
             this.colDescription.AutoSizeMode = System.Windows.Forms.DataGridViewAutoSizeColumnMode.Fill;
 
             //

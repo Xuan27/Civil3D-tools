@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text;
@@ -22,6 +23,13 @@ namespace LegendBuilderWW.Config
         /// the insertion prompt.
         /// </summary>
         public bool SingleColumn { get; set; }
+
+        /// <summary>
+        /// Remembered description edits, keyed by "RowType|Key" (e.g. "Block|V-UTIL-STRM-CULV").
+        /// Applied when rows are built so a once-edited label (e.g. "STORM CULVERT") sticks across runs.
+        /// Initialized non-null so a settings.json written before this field existed still loads.
+        /// </summary>
+        public Dictionary<string, string> DescriptionOverrides { get; set; } = new Dictionary<string, string>();
 
         /// <summary>
         /// Optional Y threshold. Entities above this Y in the template block are treated as the legend title

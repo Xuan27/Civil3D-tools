@@ -35,6 +35,14 @@ namespace LegendBuilderWW.Models
         public string Description
         {
             get { return Source.Description; }
+            set
+            {
+                if (Source.Description != value)
+                {
+                    Source.Description = value;
+                    OnPropertyChanged("Description");
+                }
+            }
         }
 
         public string Key

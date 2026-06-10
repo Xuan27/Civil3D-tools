@@ -26,7 +26,7 @@ The command is named **`LEGENDBUILDERWW`** specifically to avoid colliding with 
 3. Run `LEGENDBUILDERWW`.
 4. When prompted, **select the SincpacC3D symbols table**. The plugin reads the block name out of each symbol cell, reads the **Vertical Legend** template block (from the current drawing if present, otherwise from the configured source DWG), and opens a dialog.
 5. Rows whose block appears in the table are pre-checked; unused rows appear unchecked so you can force-include a symbol you are about to add. Symbols used in the drawing but missing from the template ("orphans") are added unchecked too — tick them to append them.
-6. Filter the list with the `Show` and `Type` dropdowns and the search box, adjust checkboxes, and click `Generate`.
+6. Filter the list with the `Show` and `Type` dropdowns and the search box, adjust checkboxes, and click `Generate`. The **Description** column is editable — change a label (e.g. `V-UTIL-STRM-CULV` → `STORM CULVERT`) and it is used in the legend; edits are remembered for that symbol across runs (stored in `DescriptionOverrides`). Use **Preview Legend** to see the result before generating.
 7. At the insertion prompt, pick a point in paper space — or type `S`/`T` to switch between **Single-column** and **Two-column** layout (remembered for next time). The plugin creates a new `LEGEND_WW_<timestamp>` block and inserts one reference at the point.
 
 The output is grouped by type — point/block symbols first, then linetypes, then hatches — laid out column-major (left column fills top-to-bottom, then the right). Each run produces a fresh block — the plugin never edits an existing legend in place.
@@ -40,7 +40,9 @@ Settings live in `%APPDATA%\WPS\LegendBuilderWW\settings.json` and are created o
 | `SourceDwgPath` | `C:\WPS-CAD-LAND\2023-WPS\Tool Palettes\Land Survey\Source\Legends and Notes.dwg` | DWG holding the master Vertical Legend block. |
 | `SourceBlockName` | `Vertical Legend` | Block to read from the source DWG. |
 | `OutputBlockNamePrefix` | `LEGEND_WW_` | Prefix for newly created legend blocks. |
-| `RowGroupingTolerance` | `0.1` | Y-distance within which entities are clustered into the same row when parsing the template. |
+| `RowGroupingTolerance` | `0.2` | Y-distance within which entities are clustered into the same row when parsing the template. |
+| `SingleColumn` | `false` | Single-column vs two-column (column-major) output. Toggled at the insertion prompt; remembered here. |
+| `DescriptionOverrides` | `{}` | Remembered description edits, keyed by `RowType\|Key`. Delete an entry to revert a label to its default. |
 | `TitleEntityYThreshold` | `null` | Optional Y cutoff above which template entities are treated as the title (LEGEND text + bar). `null` auto-detects. |
 
 Edit them through the `Settings...` button in the dialog or by hand in the JSON file. The plugin needs no admin rights and no environment variables.

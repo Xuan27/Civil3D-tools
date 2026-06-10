@@ -144,8 +144,11 @@ namespace LegendBuilderWW.UI
 
         private void OnGridDirtyStateChanged(object sender, EventArgs e)
         {
-            // Commit checkbox edits immediately so the model + summary stay in sync.
-            if (grid.IsCurrentCellDirty)
+            // Commit the checkbox immediately so the model + summary stay in sync. The editable
+            // Description column commits on cell-leave so typing isn't interrupted per keystroke.
+            if (grid.IsCurrentCellDirty &&
+                grid.CurrentCell != null &&
+                grid.CurrentCell.ColumnIndex == colInclude.Index)
             {
                 grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
             }

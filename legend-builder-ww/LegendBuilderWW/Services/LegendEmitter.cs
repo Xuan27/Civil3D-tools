@@ -310,7 +310,12 @@ namespace LegendBuilderWW.Services
 
             Vector3d offset = new Vector3d(columnX - row.RowOrigin.X, y - row.RowOrigin.Y, 0);
             CloneEntitiesInto(tr, row.SymbolEntityIds, target, offset);
-            CloneEntitiesInto(tr, new List<ObjectId> { row.DescriptionEntityId }, target, offset);
+
+            // Clone the template's description entity (keeps its style/height/layer) but stamp the
+            // row's current Description text, so edits made in the dialog are honored.
+            List<Entity> descClones = CloneEntitiesInto(
+                tr, new List<ObjectId> { row.DescriptionEntityId }, target, offset);
+            SetDescriptionText(descClones, row.Description);
         }
 
         /// <summary>

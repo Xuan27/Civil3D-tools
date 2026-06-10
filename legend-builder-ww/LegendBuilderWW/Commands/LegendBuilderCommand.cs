@@ -92,6 +92,11 @@ namespace LegendBuilderWW.Commands
                         orphanRows.Count, string.Join("\n  ", DescribeOrphans(orphanRows))));
                 }
 
+                // Apply remembered description edits, then snapshot so we can tell what the user
+                // changes in this session.
+                ApplyDescriptionOverrides(settings, matched);
+                Dictionary<string, string> descriptionBaseline = SnapshotDescriptions(matched);
+
                 LegendEmitter emitter = new LegendEmitter(settings);
                 System.Drawing.Size previewSize = new System.Drawing.Size(800, 1000);
                 System.Func<List<MatchedRow>, System.Drawing.Image> previewProvider =
@@ -105,6 +110,12 @@ namespace LegendBuilderWW.Commands
                     {
                         ErrorHandler.ShowMessage(editor, "Legend Builder cancelled.");
                         return;
+                    }
+
+                    // Remember any description edits before emitting so they stick next time.
+                    if (UpdateDescriptionOverrides(settings, matched, descriptionBaseline))
+                    {
+                        try { settings.Save(); } catch { /* remembering edits is best-effort */ }
                     }
 
                     emitter.Emit(doc, matched, parse.TitleEntityIds, parse.TopRowOriginY);
@@ -369,6 +380,66 @@ namespace LegendBuilderWW.Commands
                 lines.Add(string.Format("{0,-8} {1,-28} \"{2}\"", m.Source.RowType, m.Source.Key, m.Source.Description));
             }
             return lines;
+        }
+
+        // Remembered-description support. Keyed by "RowType|Key" so a block and a linetype with the
+        // same name don't collide.
+        private static string OverrideKey(MatchedRow row)
+        {
+            return row.Source.RowType + "|" + (row.Source.Key ?? string.Empty);
+        }
+
+        private static void ApplyDescriptionOverrides(Settings settings, List<MatchedRow> rows)
+        {
+            Dictionary<string, string> map = settings.DescriptionOverrides;
+            if (map == null || map.Count == 0) return;
+
+            foreach (MatchedRow row in rows)
+            {
+                string saved;
+                if (map.TryGetValue(OverrideKey(row), out saved) && !string.IsNullOrEmpty(saved))
+                {
+                    row.Description = saved;
+                }
+            }
+        }
+
+        private static Dictionary<string, string> SnapshotDescriptions(List<MatchedRow> rows)
+        {
+            Dictionary<string, string> snapshot = new Dictionary<string, string>();
+            foreach (MatchedRow row in rows)
+            {
+                snapshot[OverrideKey(row)] = row.Description;
+            }
+            return snapshot;
+        }
+
+        /// <summary>
+        /// Stores into settings any description that the user changed from its session baseline.
+        /// Returns true if anything changed (so the caller saves settings).
+        /// </summary>
+        private static bool UpdateDescriptionOverrides(
+            Settings settings, List<MatchedRow> rows, Dictionary<string, string> baseline)
+        {
+            if (settings.DescriptionOverrides == null)
+            {
+                settings.DescriptionOverrides = new Dictionary<string, string>();
+            }
+
+            bool changed = false;
+            foreach (MatchedRow row in rows)
+            {
+                string key = OverrideKey(row);
+                string baseDescription;
+                baseline.TryGetValue(key, out baseDescription);
+
+                if (!string.Equals(baseDescription, row.Description))
+                {
+                    settings.DescriptionOverrides[key] = row.Description;
+                    changed = true;
+                }
+            }
+            return changed;
         }
 
         /// <summary>
