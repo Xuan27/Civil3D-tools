@@ -40,13 +40,17 @@ namespace LegendBuilderWW.Services
                     Extents3d? extents = ComputeBlockExtents(tr, blockId);
                     if (!extents.HasValue) { tr.Commit(); return null; }
 
-                    device = gsm.CreateAutoCADOffScreenDevice();
+                    // AutoCAD 2015+ requires a graphics kernel for the off-screen device/model.
+                    GraphicsKernel kernel = AcquireKernel();
+
+                    device = gsm.CreateAutoCADOffScreenDevice(kernel);
                     device.OnSize(size);
+                    device.DeviceRenderType = RendererType.Default;
                     device.BackgroundColor = background;
 
                     view = new GsView();
                     device.Add(view);
-                    model = gsm.CreateAutoCADModel();
+                    model = gsm.CreateAutoCADModel(kernel);
 
                     // A transient (non-database) reference to the block is what we draw.
                     reference = new BlockReference(Point3d.Origin, blockId);
@@ -74,6 +78,13 @@ namespace LegendBuilderWW.Services
                 if (view != null) { try { view.Dispose(); } catch { } }
                 if (device != null) { try { device.Dispose(); } catch { } }
             }
+        }
+
+        private static GraphicsKernel AcquireKernel()
+        {
+            KernelDescriptor descriptor = new KernelDescriptor();
+            descriptor.addRequirement(Autodesk.AutoCAD.UniqueString.Intern("3D Drawing"));
+            return Manager.AcquireGraphicsKernel(descriptor);
         }
 
         private static Extents3d? ComputeBlockExtents(Transaction tr, ObjectId blockId)
