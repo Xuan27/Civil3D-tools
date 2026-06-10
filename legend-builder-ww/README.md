@@ -43,6 +43,7 @@ Settings live in `%APPDATA%\WPS\LegendBuilderWW\settings.json` and are created o
 | `RowGroupingTolerance` | `0.2` | Y-distance within which entities are clustered into the same row when parsing the template. |
 | `SingleColumn` | `false` | Single-column vs two-column (column-major) output. Toggled at the insertion prompt; remembered here. |
 | `DescriptionOverrides` | `{}` | Remembered description edits, keyed by `RowType\|Key`. Delete an entry to revert a label to its default. |
+| `IncludeOverrides` | `{}` | Remembered check state, keyed by `RowType\|Key`. A symbol checked last run (including orphans) comes back checked. Delete an entry to fall back to the default. |
 | `TitleEntityYThreshold` | `null` | Optional Y cutoff above which template entities are treated as the title (LEGEND text + bar). `null` auto-detects. |
 
 Edit them through the `Settings...` button in the dialog or by hand in the JSON file. The plugin needs no admin rights and no environment variables.

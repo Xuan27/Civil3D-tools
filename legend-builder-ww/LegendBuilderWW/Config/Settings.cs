@@ -32,6 +32,13 @@ namespace LegendBuilderWW.Config
         public Dictionary<string, string> DescriptionOverrides { get; set; } = new Dictionary<string, string>();
 
         /// <summary>
+        /// Remembered check state, keyed by "RowType|Key". Lets a previously-checked symbol (including
+        /// orphans that default to unchecked) come back checked next run. Symbols not in the map fall
+        /// back to the default (checked when used in the drawing).
+        /// </summary>
+        public Dictionary<string, bool> IncludeOverrides { get; set; } = new Dictionary<string, bool>();
+
+        /// <summary>
         /// Optional Y threshold. Entities above this Y in the template block are treated as the legend title
         /// (LEGEND text + green bar) and skipped during row parsing. Null = auto-detect.
         /// </summary>

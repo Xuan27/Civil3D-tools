@@ -92,9 +92,10 @@ namespace LegendBuilderWW.Commands
                         orphanRows.Count, string.Join("\n  ", DescribeOrphans(orphanRows))));
                 }
 
-                // Apply remembered description edits, then snapshot so we can tell what the user
-                // changes in this session.
+                // Apply remembered description edits + check state, then snapshot descriptions so we
+                // can tell what the user changes in this session.
                 ApplyDescriptionOverrides(settings, matched);
+                ApplyIncludeOverrides(settings, matched);
                 Dictionary<string, string> descriptionBaseline = SnapshotDescriptions(matched);
 
                 LegendEmitter emitter = new LegendEmitter(settings);
@@ -112,8 +113,10 @@ namespace LegendBuilderWW.Commands
                         return;
                     }
 
-                    // Remember any description edits before emitting so they stick next time.
-                    if (UpdateDescriptionOverrides(settings, matched, descriptionBaseline))
+                    // Remember description edits + the current check selection before emitting.
+                    bool overridesChanged = UpdateDescriptionOverrides(settings, matched, descriptionBaseline);
+                    overridesChanged |= UpdateIncludeOverrides(settings, matched);
+                    if (overridesChanged)
                     {
                         try { settings.Save(); } catch { /* remembering edits is best-effort */ }
                     }
@@ -436,6 +439,47 @@ namespace LegendBuilderWW.Commands
                 if (!string.Equals(baseDescription, row.Description))
                 {
                     settings.DescriptionOverrides[key] = row.Description;
+                    changed = true;
+                }
+            }
+            return changed;
+        }
+
+        private static void ApplyIncludeOverrides(Settings settings, List<MatchedRow> rows)
+        {
+            Dictionary<string, bool> map = settings.IncludeOverrides;
+            if (map == null || map.Count == 0) return;
+
+            foreach (MatchedRow row in rows)
+            {
+                bool saved;
+                if (map.TryGetValue(OverrideKey(row), out saved))
+                {
+                    row.IncludeInOutput = saved;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Records the current check state of every row so the selection comes back next run.
+        /// Returns true if any stored value changed (so the caller saves settings).
+        /// </summary>
+        private static bool UpdateIncludeOverrides(Settings settings, List<MatchedRow> rows)
+        {
+            if (settings.IncludeOverrides == null)
+            {
+                settings.IncludeOverrides = new Dictionary<string, bool>();
+            }
+
+            bool changed = false;
+            foreach (MatchedRow row in rows)
+            {
+                string key = OverrideKey(row);
+                bool existing;
+                bool had = settings.IncludeOverrides.TryGetValue(key, out existing);
+                if (!had || existing != row.IncludeInOutput)
+                {
+                    settings.IncludeOverrides[key] = row.IncludeInOutput;
                     changed = true;
                 }
             }
